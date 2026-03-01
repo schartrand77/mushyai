@@ -124,6 +124,46 @@
           </form>
         </section>
 
+        <section class="card preview-card" aria-labelledby="preview-title">
+          <div class="section-head">
+            <div>
+              <p class="kicker">Display wall</p>
+              <h2 id="preview-title">High-resolution preview</h2>
+            </div>
+            <span class="badge" id="preview-mode">Idle</span>
+          </div>
+
+          <div class="preview-shell">
+            <div class="preview-stage" id="preview-scene" data-mode="idle">
+              <div class="preview-orb"></div>
+              <div class="preview-grid"></div>
+              <div class="preview-object" id="preview-object">
+                <div class="preview-face face-front"></div>
+                <div class="preview-face face-back"></div>
+                <div class="preview-face face-left"></div>
+                <div class="preview-face face-right"></div>
+                <div class="preview-face face-top"></div>
+                <div class="preview-face face-bottom"></div>
+              </div>
+              <div class="preview-shadow"></div>
+            </div>
+            <div class="preview-meta">
+              <div>
+                <p class="panel-label">Subject</p>
+                <h3 id="preview-subject">Awaiting queue input</h3>
+              </div>
+              <p class="preview-copy" id="preview-copy">
+                Queue a concept or run the cube calibration to light up the display wall.
+              </p>
+              <div class="preview-specs">
+                <span id="preview-style">No style</span>
+                <span id="preview-topology">No topology</span>
+                <span id="preview-stage-label">No stage</span>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <section class="card status-card" aria-labelledby="status-title">
           <div class="section-head">
             <div>

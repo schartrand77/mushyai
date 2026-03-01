@@ -11,6 +11,7 @@ test.describe("mushyai docker app", () => {
     await expect(page).toHaveTitle("Mushy AI Control Room");
     await expect(page.getByRole("heading", { name: "Mushy AI Control Room" })).toBeVisible();
     await expect(page.getByText("Private mode enabled.")).toBeVisible();
+    await expect(page.getByRole("heading", { name: "High-resolution preview" })).toBeVisible();
   });
 
   test("queues a job, advances the pipeline, and persists after reload", async ({ page }) => {
@@ -26,6 +27,7 @@ test.describe("mushyai docker app", () => {
 
     await expect(page.locator("#active-job-badge")).toHaveText("Queued");
     await expect(page.locator("#job-list")).toContainText("A hand-thrown ceramic lantern");
+    await expect(page.locator("#preview-subject")).toContainText("A hand-thrown ceramic lantern");
 
     await expect.poll(async () => page.locator("#active-progress").textContent()).toBe("20%");
     await expect(page.locator("#pipeline-stages")).toContainText("Input cleanup");
@@ -45,5 +47,6 @@ test.describe("mushyai docker app", () => {
     await expect(page.locator("#calibration-feedback")).toContainText("square.svg");
     await expect(page.locator("#job-list")).toContainText("Perfect cube calibration - square.svg");
     await expect(page.locator("#active-prompt")).toContainText("Perfect cube calibration");
+    await expect(page.locator("#preview-subject")).toContainText("Perfect cube calibration");
   });
 });

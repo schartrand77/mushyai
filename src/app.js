@@ -226,6 +226,54 @@ export function saveState(state, storage = window.localStorage) {
   storage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
+export function getPreviewMode(job) {
+  if (!job) {
+    return "idle";
+  }
+
+  return job.stylePreset === "calibration" ? "calibration" : "concept";
+}
+
+export function stringToPaletteSeed(input) {
+  return [...input].reduce((total, character) => total + character.charCodeAt(0), 0);
+}
+
+export function buildPreviewModel(job) {
+  if (!job) {
+    return {
+      mode: "idle",
+      subject: "Awaiting queue input",
+      copy: "Queue a concept or run the cube calibration to light up the display wall.",
+      style: "No style",
+      topology: "No topology",
+      stage: "No stage",
+      accentA: "#d8843d",
+      accentB: "#4d6a7d",
+      accentC: "#fff2d9",
+    };
+  }
+
+  const seed = stringToPaletteSeed(job.summary);
+  const warm = 28 + (seed % 30);
+  const cool = 190 + (seed % 35);
+  const deep = 20 + (seed % 12);
+
+  return {
+    mode: getPreviewMode(job),
+    subject: job.summary,
+    copy:
+      job.stylePreset === "calibration"
+        ? "Square reference locked. Preview tuned for a mathematically clean calibration cube."
+        : "Display wall tuned for high-resolution inspection with volumetric light and material contrast.",
+    style: `Style: ${job.stylePreset}`,
+    topology: `Topology: ${job.topology}`,
+    stage: `Stage: ${stageLabel(job.stage)}`,
+    accentA: `hsl(${warm} 74% 58%)`,
+    accentB: `hsl(${cool} 30% 37%)`,
+    accentC: `hsl(${deep} 100% 92%)`,
+  };
+}
+
 export function inspectImageFile(file, createObjectURL = URL.createObjectURL) {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -292,6 +340,13 @@ export function createApp({
     progressBar: document.querySelector('[role="progressbar"]'),
     pipelineStages: document.querySelector("#pipeline-stages"),
     activeJobBadge: document.querySelector("#active-job-badge"),
+    previewScene: document.querySelector("#preview-scene"),
+    previewMode: document.querySelector("#preview-mode"),
+    previewSubject: document.querySelector("#preview-subject"),
+    previewCopy: document.querySelector("#preview-copy"),
+    previewStyle: document.querySelector("#preview-style"),
+    previewTopology: document.querySelector("#preview-topology"),
+    previewStageLabel: document.querySelector("#preview-stage-label"),
   };
 
   let state = loadState(storage);
@@ -388,7 +443,18 @@ export function createApp({
 
   function render() {
     const activeJob = getActiveJob();
+    const preview = buildPreviewModel(activeJob);
     elements.feedback.textContent = state.lastMessage;
+    elements.previewScene.dataset.mode = preview.mode;
+    elements.previewScene.style.setProperty("--preview-a", preview.accentA);
+    elements.previewScene.style.setProperty("--preview-b", preview.accentB);
+    elements.previewScene.style.setProperty("--preview-c", preview.accentC);
+    elements.previewMode.textContent = preview.mode === "idle" ? "Idle" : "Live preview";
+    elements.previewSubject.textContent = preview.subject;
+    elements.previewCopy.textContent = preview.copy;
+    elements.previewStyle.textContent = preview.style;
+    elements.previewTopology.textContent = preview.topology;
+    elements.previewStageLabel.textContent = preview.stage;
 
     renderJobs();
     renderPipeline(activeJob);

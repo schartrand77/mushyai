@@ -3,6 +3,7 @@ import {
   STAGES,
   advanceJob,
   createApp,
+  buildPreviewModel,
   createCalibrationJob,
   createInitialState,
   createJob,
@@ -45,6 +46,13 @@ function mountDom() {
       <div role="progressbar" aria-valuenow="0"><span id="progress-fill"></span></div>
       <div id="pipeline-stages"></div>
       <span id="active-job-badge"></span>
+      <div id="preview-scene" data-mode="idle"></div>
+      <span id="preview-mode"></span>
+      <h3 id="preview-subject"></h3>
+      <p id="preview-copy"></p>
+      <span id="preview-style"></span>
+      <span id="preview-topology"></span>
+      <span id="preview-stage-label"></span>
     </main>
   `;
 }
@@ -120,6 +128,16 @@ describe("app state helpers", () => {
     expect(job.prompt).toContain("Perfect 3D cube calibration");
     expect(job.stylePreset).toBe("calibration");
   });
+
+  it("builds a calibration preview model", () => {
+    const model = buildPreviewModel(
+      createCalibrationJob({ name: "square.svg" }, new Date("2026-03-01T10:00:00.000Z")),
+    );
+
+    expect(model.mode).toBe("calibration");
+    expect(model.subject).toContain("square.svg");
+    expect(model.stage).toContain("Queued");
+  });
 });
 
 describe("app DOM behavior", () => {
@@ -146,6 +164,7 @@ describe("app DOM behavior", () => {
     expect(app.getState().jobs).toHaveLength(1);
     expect(document.querySelector("#job-list").textContent).toContain("lacquered tea tin");
     expect(document.querySelector("#active-job-badge").textContent).toBe("Queued");
+    expect(document.querySelector("#preview-subject").textContent).toContain("lacquered tea tin");
     app.destroy();
   });
 
@@ -238,6 +257,8 @@ describe("app DOM behavior", () => {
     expect(app.getState().jobs).toHaveLength(1);
     expect(app.getState().jobs[0].summary).toBe("Perfect cube calibration - square.svg");
     expect(document.querySelector("#calibration-feedback").textContent).toContain("square.svg");
+    expect(document.querySelector("#preview-mode").textContent).toBe("Live preview");
+    expect(document.querySelector("#preview-stage-label").textContent).toContain("Queued");
     app.destroy();
   });
 });

@@ -12,6 +12,7 @@ export function queryElements(document) {
     submit: document.querySelector("#submit-job"),
     clearHistory: document.querySelector("#clear-history"),
     jobList: document.querySelector("#job-list"),
+    suggestions: document.querySelector("#suggestions"),
     emptyState: document.querySelector("#empty-state"),
     pipelinePanel: document.querySelector("#pipeline-panel"),
     activePrompt: document.querySelector("#active-prompt"),

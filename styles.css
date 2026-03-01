@@ -789,3 +789,36 @@ button:hover {
 .is-favorite .favorite-button svg {
   fill: var(--accent);
 }
+
+.suggestions {
+  margin-top: 24px;
+}
+
+.suggestions h3 {
+  font-size: 1rem;
+  margin-bottom: 12px;
+}
+
+.suggestion-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.suggestion-button {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  padding: 8px 12px;
+  font-size: 0.85rem;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.suggestion-button:hover {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent-strong);
+}

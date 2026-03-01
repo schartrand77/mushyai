@@ -5,10 +5,10 @@ import { bindHistoryControls } from "./components/HistoryControls.js";
 import {
   bindCalibration,
   bindJobForm,
-  bindPromptDraftInputs,
   readFormValues,
   resetForm,
 } from "./components/JobForm.js";
+import { renderSuggestions } from "./components/Suggestions.js";
 import { inspectImageFile, validateCalibrationImage } from "./media.js";
 import { buildPreviewModel } from "./models.js";
 import {
@@ -30,6 +30,7 @@ import {
   summarizePrompt,
   validatePrompt,
 } from "./state.js";
+import { getFavoriteKeywords } from "./suggestions.js";
 
 export {
   advanceJob,
@@ -65,43 +66,15 @@ export function createApp({
   const elements = queryElements(document);
   let state = loadState(storage);
   let timer = null;
-  let draftTimer = null;
-  let draftRequestId = 0;
-  let draftGeneration = null;
-  let lastDraftSignature = "";
 
   function getActiveJob() {
     return state.jobs.find((job) => job.id === state.activeJobId) ?? null;
   }
 
-  function getDraftJob() {
-    if (!draftGeneration) {
-      return null;
-    }
-
-    const values = readFormValues(elements);
-    return {
-      id: "draft-preview",
-      prompt: values.prompt.trim(),
-      summary: draftGeneration.summary,
-      stylePreset: values.stylePreset,
-      topology: values.topology,
-      textureDetail: values.textureDetail,
-      stage: "draft",
-      result: draftGeneration,
-    };
-  }
-
   function render() {
-    renderAppView(
-      elements,
-      {
-        ...state,
-        draftJob: getActiveJob() ? null : getDraftJob(),
-      },
-      getActiveJob(),
-      dispatch,
-    );
+    renderAppView(elements, state, getActiveJob(), dispatch);
+    const keywords = getFavoriteKeywords(state.jobs);
+    renderSuggestions(elements, keywords, dispatch);
   }
 
   function syncTimer() {
@@ -135,50 +108,6 @@ export function createApp({
     syncTimer();
   }
 
-  function queueDraftInterpretation() {
-    const values = readFormValues(elements);
-    const error = validatePrompt(values.prompt);
-
-    if (draftTimer) {
-      clearTimeout(draftTimer);
-      draftTimer = null;
-    }
-
-    if (error) {
-      draftGeneration = null;
-      lastDraftSignature = "";
-      render();
-      return;
-    }
-
-    const signature = JSON.stringify(values);
-    if (signature === lastDraftSignature && draftGeneration) {
-      return;
-    }
-
-    const requestId = ++draftRequestId;
-    draftTimer = setTimeout(async () => {
-      try {
-        const generation = await apiClient("/api/generate", values);
-
-        if (requestId !== draftRequestId) {
-          return;
-        }
-
-        lastDraftSignature = signature;
-        draftGeneration = generation;
-        render();
-      } catch {
-        if (requestId !== draftRequestId) {
-          return;
-        }
-
-        draftGeneration = null;
-        render();
-      }
-    }, 250);
-  }
-
   async function handleSubmit(event) {
     event.preventDefault();
     const values = readFormValues(elements);
@@ -196,14 +125,8 @@ export function createApp({
     });
 
     try {
-      const signature = JSON.stringify(values);
-      const generation =
-        draftGeneration && lastDraftSignature === signature
-          ? draftGeneration
-          : await apiClient("/api/generate", values);
+      const generation = await apiClient("/api/generate", values);
       const job = createJobFromGeneration(values, generation, clock());
-      draftGeneration = null;
-      lastDraftSignature = "";
       dispatch({
         type: "jobQueued",
         job,
@@ -256,10 +179,6 @@ export function createApp({
   }
 
   const unbindJobForm = bindJobForm(elements, handleSubmit);
-  const unbindDraftInputs = bindPromptDraftInputs(
-    elements,
-    queueDraftInterpretation,
-  );
   const unbindCalibration = bindCalibration(elements, handleCalibration);
   const unbindHistory = bindHistoryControls(elements, () =>
     dispatch({ type: "clearCompleted" }),
@@ -274,11 +193,7 @@ export function createApp({
       if (timer) {
         clearInterval(timer);
       }
-      if (draftTimer) {
-        clearTimeout(draftTimer);
-      }
       unbindJobForm();
-      unbindDraftInputs();
       unbindCalibration();
       unbindHistory();
     },

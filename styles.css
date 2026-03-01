@@ -1,0 +1,133 @@
+:root {
+  --bg: #f4f6fb;
+  --text: #1f2937;
+  --muted: #4b5563;
+  --primary: #4f46e5;
+  --primary-soft: #e4e7ff;
+  --card: #ffffff;
+  --line: #d1d5db;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  color: var(--text);
+  background: var(--bg);
+}
+
+.hero {
+  max-width: 980px;
+  margin: 40px auto 24px;
+  padding: 0 16px;
+}
+
+.chat-chip {
+  width: fit-content;
+  margin: 0 auto 20px;
+  background: #e8ecf4;
+  color: #374151;
+  padding: 12px 20px;
+  border-radius: 999px;
+  font-size: 18px;
+}
+
+h1 {
+  text-align: center;
+  margin: 0;
+  font-size: clamp(1.8rem, 3vw, 2.5rem);
+}
+
+.subtitle {
+  text-align: center;
+  max-width: 760px;
+  margin: 12px auto 0;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+.cta-row {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  margin-top: 22px;
+}
+
+button {
+  border: 0;
+  border-radius: 10px;
+  padding: 10px 14px;
+  font-weight: 600;
+  background: var(--primary);
+  color: #fff;
+}
+
+button.secondary {
+  background: var(--primary-soft);
+  color: #3730a3;
+}
+
+.grid {
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 0 16px 24px;
+  display: grid;
+  gap: 14px;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 16px;
+}
+
+.card h2 { margin-top: 0; font-size: 1.08rem; }
+.card p { color: var(--muted); line-height: 1.45; }
+.card ul { margin: 0; padding-left: 18px; color: #334155; }
+
+.wide { grid-column: 1 / -1; }
+
+.pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
+}
+
+.stage {
+  text-align: center;
+  padding: 10px;
+  border-radius: 10px;
+  background: #f3f4f6;
+  color: #475569;
+  border: 1px solid #e5e7eb;
+}
+
+.stage.complete {
+  background: #dcfce7;
+  color: #166534;
+  border-color: #bbf7d0;
+}
+
+.stage.active {
+  background: #ede9fe;
+  color: #5b21b6;
+  border-color: #ddd6fe;
+}
+
+.backlog {
+  display: grid;
+  gap: 8px;
+}
+
+footer {
+  text-align: center;
+  color: #6b7280;
+  padding: 8px 0 24px;
+}
+
+@media (max-width: 640px) {
+  .pipeline { grid-template-columns: 1fr; }
+}

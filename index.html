@@ -3,90 +3,149 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Meshify — 3D Generative Pipeline</title>
+    <title>Mushy AI Control Room</title>
+    <meta
+      name="description"
+      content="Private single-user control room for managing a local 3D generation workflow."
+    />
     <link rel="stylesheet" href="styles.css" />
+    <script type="module" src="src/main.js"></script>
   </head>
   <body>
-    <header class="hero">
-      <p class="chat-chip">Create a meshy AI copycat app</p>
-      <h1>Build a Meshy-style 3D generation experience</h1>
-      <p class="subtitle">
-        A layout inspired by the shared Gemini conversation: from prompt and image
-        intake to reconstruction, texturing, and export.
-      </p>
-      <div class="cta-row">
-        <button>Generate 3D</button>
-        <button class="secondary">View Pipeline</button>
-      </div>
-    </header>
-
-    <main class="grid">
-      <section class="card">
-        <h2>1. Input Studio</h2>
-        <p>Collect prompts or concept images and prepare them for reconstruction.</p>
-        <ul>
-          <li>Text prompt composer</li>
-          <li>Image upload & background removal</li>
-          <li>Style and polycount presets</li>
-        </ul>
-      </section>
-
-      <section class="card">
-        <h2>2. LRM Reconstruction</h2>
-        <p>Generate a coarse geometry pass with Large Reconstruction Models.</p>
-        <ul>
-          <li>Single-view / multi-view mode</li>
-          <li>Depth + normal estimation</li>
-          <li>Progressive mesh refinement</li>
-        </ul>
-      </section>
-
-      <section class="card">
-        <h2>3. Texture & Material Pass</h2>
-        <p>Apply physically based materials to produce game-ready outputs.</p>
-        <ul>
-          <li>PBR texture generation</li>
-          <li>UV unwrapping and seam cleanup</li>
-          <li>Smart relighting previews</li>
-        </ul>
-      </section>
-
-      <section class="card">
-        <h2>4. Export & Delivery</h2>
-        <p>Ship assets directly into creator workflows.</p>
-        <ul>
-          <li>GLB / FBX / OBJ export</li>
-          <li>Auto LOD and decimation</li>
-          <li>API and webhook callbacks</li>
-        </ul>
-      </section>
-
-      <section class="card wide">
-        <h2>Pipeline Status</h2>
-        <div class="pipeline" aria-label="3D generation pipeline">
-          <div class="stage complete">Prompt</div>
-          <div class="stage complete">Views</div>
-          <div class="stage active">Reconstruction</div>
-          <div class="stage">Texturing</div>
-          <div class="stage">Export</div>
+    <div class="page-shell">
+      <header class="hero">
+        <div class="hero-copy">
+          <p class="eyebrow">Private single-user workspace</p>
+          <h1>Mushy AI Control Room</h1>
+          <p class="subtitle">
+            A local-first workflow for one operator to queue concepts, watch the
+            mesh pipeline progress, and keep a clean job history.
+          </p>
         </div>
-      </section>
+        <aside class="hero-panel" aria-label="Workspace profile">
+          <p class="panel-label">Workspace</p>
+          <h2>Solo Operator</h2>
+          <p>Private mode enabled. Data stays in this browser via local storage.</p>
+          <div class="profile-stats">
+            <div>
+              <span>Retention</span>
+              <strong>Unlimited</strong>
+            </div>
+            <div>
+              <span>Access</span>
+              <strong>1 user</strong>
+            </div>
+          </div>
+        </aside>
+      </header>
 
-      <section class="card wide">
-        <h2>Starter Backlog</h2>
-        <div class="backlog">
-          <label><input type="checkbox" checked /> Queue + job orchestration</label>
-          <label><input type="checkbox" checked /> Cost controls for GPU inference</label>
-          <label><input type="checkbox" /> Human feedback + rating loop</label>
-          <label><input type="checkbox" /> Team workspace and asset collections</label>
-        </div>
-      </section>
-    </main>
+      <main class="layout" id="app">
+        <section class="card composer-card" aria-labelledby="composer-title">
+          <div class="section-head">
+            <div>
+              <p class="kicker">Input studio</p>
+              <h2 id="composer-title">Create a new generation job</h2>
+            </div>
+            <span class="badge">Local queue</span>
+          </div>
 
-    <footer>
-      <small>
-        Concept prototype: “Meshify” — a 3D generative pipeline app layout.
-      </small>
-    </footer>
+          <form id="job-form" class="job-form" novalidate>
+            <label class="field">
+              <span>Prompt</span>
+              <textarea
+                id="prompt"
+                name="prompt"
+                rows="5"
+                maxlength="280"
+                placeholder="Describe the object, mood, materials, and camera angle."
+                required
+              ></textarea>
+            </label>
+
+            <div class="field-grid">
+              <label class="field">
+                <span>Style preset</span>
+                <select id="stylePreset" name="stylePreset">
+                  <option value="product">Product render</option>
+                  <option value="stylized">Stylized hero asset</option>
+                  <option value="hard-surface">Hard-surface prop</option>
+                  <option value="organic">Organic sculpt</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Topology target</span>
+                <select id="topology" name="topology">
+                  <option value="game-ready">Game-ready</option>
+                  <option value="cinematic">Cinematic</option>
+                  <option value="blockout">Fast blockout</option>
+                </select>
+              </label>
+
+              <label class="field">
+                <span>Texture detail</span>
+                <select id="textureDetail" name="textureDetail">
+                  <option value="2k">2K</option>
+                  <option value="4k">4K</option>
+                  <option value="8k">8K</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-actions">
+              <p id="form-feedback" class="feedback" aria-live="polite"></p>
+              <button type="submit" id="submit-job">Queue generation</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="card status-card" aria-labelledby="status-title">
+          <div class="section-head">
+            <div>
+              <p class="kicker">Pipeline</p>
+              <h2 id="status-title">Current run</h2>
+            </div>
+            <span class="badge" id="active-job-badge">No active job</span>
+          </div>
+
+          <div id="empty-state" class="empty-state">
+            Queue a job to start the private pipeline simulation.
+          </div>
+
+          <div id="pipeline-panel" class="pipeline-panel hidden">
+            <div class="progress-row">
+              <div>
+                <p class="panel-label">Prompt</p>
+                <h3 id="active-prompt"></h3>
+              </div>
+              <strong id="active-progress">0%</strong>
+            </div>
+            <div
+              class="progress-bar"
+              role="progressbar"
+              aria-valuemin="0"
+              aria-valuemax="100"
+              aria-valuenow="0"
+            >
+              <span id="progress-fill"></span>
+            </div>
+            <div class="pipeline" id="pipeline-stages" aria-label="Generation stages"></div>
+          </div>
+        </section>
+
+        <section class="card queue-card" aria-labelledby="queue-title">
+          <div class="section-head">
+            <div>
+              <p class="kicker">History</p>
+              <h2 id="queue-title">Recent jobs</h2>
+            </div>
+            <button type="button" class="secondary-button" id="clear-history">
+              Clear completed
+            </button>
+          </div>
+          <ul id="job-list" class="job-list" aria-live="polite"></ul>
+        </section>
+      </main>
+    </div>
   </body>
 </html>

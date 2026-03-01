@@ -1,0 +1,27 @@
+services:
+  mushyai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 10s
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx
+      - /var/run
+      - /tmp
+  playwright:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    depends_on:
+      mushyai:
+        condition: service_healthy
+    environment:
+      PLAYWRIGHT_BASE_URL: http://mushyai:8080
+      CI: "1"
+    command: ["npx", "playwright", "test", "--config=playwright.config.js"]

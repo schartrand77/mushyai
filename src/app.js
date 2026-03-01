@@ -16,6 +16,22 @@ const DEFAULT_FORM = {
   textureDetail: "2k",
 };
 
+export function createCalibrationJob(file, now = new Date()) {
+  const fileName = file?.name ?? "square-reference";
+  return {
+    id: `job-${now.getTime()}`,
+    prompt: `Perfect 3D cube calibration generated from ${fileName}.`,
+    summary: `Perfect cube calibration - ${fileName}`,
+    stylePreset: "calibration",
+    topology: "game-ready",
+    textureDetail: "2k",
+    stage: "queued",
+    progress: 5,
+    createdAt: now.toISOString(),
+    updatedAt: now.toISOString(),
+  };
+}
+
 export function createInitialState() {
   return {
     form: { ...DEFAULT_FORM },
@@ -210,13 +226,60 @@ export function saveState(state, storage = window.localStorage) {
   storage.setItem(STORAGE_KEY, JSON.stringify(state));
 }
 
-export function createApp({ document, storage = window.localStorage, clock = () => new Date() }) {
+export function inspectImageFile(file, createObjectURL = URL.createObjectURL) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      reject(new Error("Select a reference image first."));
+      return;
+    }
+
+    const objectUrl = createObjectURL(file);
+    const image = new Image();
+
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve({
+        width: image.naturalWidth,
+        height: image.naturalHeight,
+      });
+    };
+
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("The selected file could not be read as an image."));
+    };
+
+    image.src = objectUrl;
+  });
+}
+
+export function validateCalibrationImage(metadata) {
+  if (!metadata || metadata.width <= 0 || metadata.height <= 0) {
+    return "The selected image is invalid.";
+  }
+
+  if (metadata.width !== metadata.height) {
+    return "Calibration requires a square image so the cube stays perfectly proportioned.";
+  }
+
+  return "";
+}
+
+export function createApp({
+  document,
+  storage = window.localStorage,
+  clock = () => new Date(),
+  inspectFile = inspectImageFile,
+}) {
   const elements = {
     form: document.querySelector("#job-form"),
     prompt: document.querySelector("#prompt"),
     stylePreset: document.querySelector("#stylePreset"),
     topology: document.querySelector("#topology"),
     textureDetail: document.querySelector("#textureDetail"),
+    calibrationImage: document.querySelector("#calibrationImage"),
+    calibrationFeedback: document.querySelector("#calibration-feedback"),
+    runCalibration: document.querySelector("#run-calibration"),
     feedback: document.querySelector("#form-feedback"),
     submit: document.querySelector("#submit-job"),
     clearHistory: document.querySelector("#clear-history"),
@@ -374,7 +437,29 @@ export function createApp({ document, storage = window.localStorage, clock = () 
     elements.prompt.focus();
   }
 
+  async function handleCalibration() {
+    const file = elements.calibrationImage.files?.[0];
+
+    try {
+      const metadata = await inspectFile(file);
+      const validationError = validateCalibrationImage(metadata);
+
+      if (validationError) {
+        elements.calibrationFeedback.textContent = validationError;
+        return;
+      }
+
+      const job = createCalibrationJob(file, clock());
+      dispatch({ type: "jobQueued", job });
+      elements.calibrationFeedback.textContent = `Calibration queued from ${file.name}.`;
+      elements.calibrationImage.value = "";
+    } catch (error) {
+      elements.calibrationFeedback.textContent = error.message;
+    }
+  }
+
   elements.form.addEventListener("submit", handleSubmit);
+  elements.runCalibration.addEventListener("click", handleCalibration);
   elements.clearHistory.addEventListener("click", () => dispatch({ type: "clearCompleted" }));
 
   render();
@@ -387,6 +472,7 @@ export function createApp({ document, storage = window.localStorage, clock = () 
         clearInterval(timer);
       }
       elements.form.removeEventListener("submit", handleSubmit);
+      elements.runCalibration.removeEventListener("click", handleCalibration);
     },
   };
 }

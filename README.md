@@ -2,6 +2,8 @@
 
 Private single-user 3D generation control room built as a static vanilla web app.
 
+The app also includes a calibration path: upload a square 2D image and it queues a perfect cube reference job so you can verify the pipeline against a known shape.
+
 ## Local development
 
 - `npm install`

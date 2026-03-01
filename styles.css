@@ -35,7 +35,8 @@ body {
 
 button,
 textarea,
-select {
+select,
+input {
   font: inherit;
 }
 
@@ -182,7 +183,8 @@ h1 {
 }
 
 textarea,
-select {
+select,
+input[type="file"] {
   width: 100%;
   border: 1px solid var(--line);
   border-radius: 18px;
@@ -391,6 +393,27 @@ button:hover {
   }
 }
 
+.calibration-panel {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: 20px;
+  background: rgba(255, 250, 241, 0.76);
+}
+
+.calibration-copy {
+  margin-bottom: 0;
+  color: var(--muted);
+}
+
+.calibration-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
 @media (max-width: 700px) {
   .page-shell {
     padding-inline: 14px;
@@ -404,6 +427,7 @@ button:hover {
 
   .field-grid,
   .form-actions,
+  .calibration-actions,
   .profile-stats,
   .job-item-header,
   .progress-row,

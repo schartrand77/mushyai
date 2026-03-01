@@ -8,5 +8,6 @@ RUN npx playwright install --with-deps chromium
 
 COPY playwright.config.js ./playwright.config.js
 COPY tests/e2e ./tests/e2e
+COPY tests/fixtures ./tests/fixtures
 
 CMD ["npx", "playwright", "test", "--config=playwright.config.js"]

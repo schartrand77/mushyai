@@ -3,10 +3,13 @@ import {
   STAGES,
   advanceJob,
   createApp,
+  createCalibrationJob,
   createInitialState,
   createJob,
+  inspectImageFile,
   loadState,
   normalizeState,
+  validateCalibrationImage,
   validatePrompt,
 } from "../src/app.js";
 
@@ -27,6 +30,9 @@ function mountDom() {
         <select id="stylePreset"><option value="product">Product</option><option value="stylized">Stylized</option></select>
         <select id="topology"><option value="game-ready">Game ready</option><option value="cinematic">Cinematic</option></select>
         <select id="textureDetail"><option value="2k">2K</option><option value="4k">4K</option></select>
+        <input id="calibrationImage" type="file" />
+        <p id="calibration-feedback"></p>
+        <button id="run-calibration" type="button">Calibrate cube</button>
         <p id="form-feedback"></p>
         <button id="submit-job" type="submit">Queue</button>
       </form>
@@ -100,6 +106,19 @@ describe("app state helpers", () => {
     };
 
     expect(loadState(storage)).toEqual(createInitialState());
+  });
+
+  it("accepts only square images for calibration", () => {
+    expect(validateCalibrationImage({ width: 128, height: 128 })).toBe("");
+    expect(validateCalibrationImage({ width: 128, height: 96 })).toContain("square image");
+  });
+
+  it("creates a perfect cube calibration job", () => {
+    const job = createCalibrationJob({ name: "square.svg" }, new Date("2026-03-01T10:00:00.000Z"));
+
+    expect(job.summary).toBe("Perfect cube calibration - square.svg");
+    expect(job.prompt).toContain("Perfect 3D cube calibration");
+    expect(job.stylePreset).toBe("calibration");
   });
 });
 
@@ -196,6 +215,29 @@ describe("app DOM behavior", () => {
 
     expect(app.getState().jobs).toHaveLength(1);
     expect(app.getState().jobs[0].id).toBe("active");
+    app.destroy();
+  });
+
+  it("queues a perfect cube calibration from a square image", async () => {
+    const storage = createStorage();
+    const app = createApp({
+      document,
+      storage,
+      clock: () => new Date("2026-03-01T10:03:00.000Z"),
+      inspectFile: vi.fn().mockResolvedValue({ width: 64, height: 64 }),
+    });
+
+    Object.defineProperty(document.querySelector("#calibrationImage"), "files", {
+      configurable: true,
+      value: [new File(["<svg></svg>"], "square.svg", { type: "image/svg+xml" })],
+    });
+
+    document.querySelector("#run-calibration").click();
+    await Promise.resolve();
+
+    expect(app.getState().jobs).toHaveLength(1);
+    expect(app.getState().jobs[0].summary).toBe("Perfect cube calibration - square.svg");
+    expect(document.querySelector("#calibration-feedback").textContent).toContain("square.svg");
     app.destroy();
   });
 });

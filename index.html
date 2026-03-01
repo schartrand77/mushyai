@@ -92,6 +92,31 @@
               </label>
             </div>
 
+            <div class="calibration-panel" aria-labelledby="calibration-title">
+              <div>
+                <p class="kicker">Calibration</p>
+                <h3 id="calibration-title">Square image to perfect cube</h3>
+                <p class="calibration-copy">
+                  Upload a square 2D reference image and queue a perfect cube calibration job.
+                </p>
+              </div>
+              <label class="field">
+                <span>Reference image</span>
+                <input
+                  id="calibrationImage"
+                  name="calibrationImage"
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                />
+              </label>
+              <div class="calibration-actions">
+                <p id="calibration-feedback" class="feedback" aria-live="polite"></p>
+                <button type="button" class="secondary-button" id="run-calibration">
+                  Calibrate cube
+                </button>
+              </div>
+            </div>
+
             <div class="form-actions">
               <p id="form-feedback" class="feedback" aria-live="polite"></p>
               <button type="submit" id="submit-job">Queue generation</button>

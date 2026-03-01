@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Meshify — 3D Generative Pipeline</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <p class="chat-chip">Create a meshy AI copycat app</p>
+      <h1>Build a Meshy-style 3D generation experience</h1>
+      <p class="subtitle">
+        A layout inspired by the shared Gemini conversation: from prompt and image
+        intake to reconstruction, texturing, and export.
+      </p>
+      <div class="cta-row">
+        <button>Generate 3D</button>
+        <button class="secondary">View Pipeline</button>
+      </div>
+    </header>
+
+    <main class="grid">
+      <section class="card">
+        <h2>1. Input Studio</h2>
+        <p>Collect prompts or concept images and prepare them for reconstruction.</p>
+        <ul>
+          <li>Text prompt composer</li>
+          <li>Image upload & background removal</li>
+          <li>Style and polycount presets</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>2. LRM Reconstruction</h2>
+        <p>Generate a coarse geometry pass with Large Reconstruction Models.</p>
+        <ul>
+          <li>Single-view / multi-view mode</li>
+          <li>Depth + normal estimation</li>
+          <li>Progressive mesh refinement</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>3. Texture & Material Pass</h2>
+        <p>Apply physically based materials to produce game-ready outputs.</p>
+        <ul>
+          <li>PBR texture generation</li>
+          <li>UV unwrapping and seam cleanup</li>
+          <li>Smart relighting previews</li>
+        </ul>
+      </section>
+
+      <section class="card">
+        <h2>4. Export & Delivery</h2>
+        <p>Ship assets directly into creator workflows.</p>
+        <ul>
+          <li>GLB / FBX / OBJ export</li>
+          <li>Auto LOD and decimation</li>
+          <li>API and webhook callbacks</li>
+        </ul>
+      </section>
+
+      <section class="card wide">
+        <h2>Pipeline Status</h2>
+        <div class="pipeline" aria-label="3D generation pipeline">
+          <div class="stage complete">Prompt</div>
+          <div class="stage complete">Views</div>
+          <div class="stage active">Reconstruction</div>
+          <div class="stage">Texturing</div>
+          <div class="stage">Export</div>
+        </div>
+      </section>
+
+      <section class="card wide">
+        <h2>Starter Backlog</h2>
+        <div class="backlog">
+          <label><input type="checkbox" checked /> Queue + job orchestration</label>
+          <label><input type="checkbox" checked /> Cost controls for GPU inference</label>
+          <label><input type="checkbox" /> Human feedback + rating loop</label>
+          <label><input type="checkbox" /> Team workspace and asset collections</label>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <small>
+        Concept prototype: “Meshify” — a 3D generative pipeline app layout.
+      </small>
+    </footer>
+  </body>
+</html>

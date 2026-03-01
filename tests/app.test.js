@@ -2,19 +2,21 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   STAGES,
   advanceJob,
-  createApp,
   buildPreviewModel,
-  createCalibrationJob,
+  createApp,
+  createCalibrationJobFromGeneration,
   createInitialState,
-  createJob,
-  inferMaterial,
-  inferShape,
-  inspectImageFile,
+  createJobFromGeneration,
   loadState,
   normalizeState,
+  prettyJson,
   validateCalibrationImage,
   validatePrompt,
 } from "../src/app.js";
+import {
+  generateCalibrationResult,
+  generatePromptInterpretation,
+} from "../backend/generator.js";
 
 function createStorage() {
   const values = new Map();
@@ -57,6 +59,10 @@ function mountDom() {
       <span id="preview-style"></span>
       <span id="preview-topology"></span>
       <span id="preview-stage-label"></span>
+      <h3 id="debug-subject"></h3>
+      <p id="debug-modifiers"></p>
+      <pre id="debug-json"></pre>
+      <pre id="debug-script"></pre>
     </main>
   `;
 }
@@ -78,16 +84,26 @@ describe("app state helpers", () => {
 
   it("rejects prompts that are too short", () => {
     expect(validatePrompt("tiny")).toContain("12 characters");
-    expect(validatePrompt("A grounded bronze kettle with woven handle")).toBe("");
+    expect(validatePrompt("A grounded bronze kettle with woven handle")).toBe(
+      "",
+    );
   });
 
   it("advances jobs through every pipeline stage", () => {
-    let job = createJob({
-      prompt: "A grounded bronze kettle with woven handle",
-      stylePreset: "product",
-      topology: "game-ready",
-      textureDetail: "2k",
-    });
+    let job = createJobFromGeneration(
+      {
+        prompt: "A grounded bronze kettle with woven handle",
+        stylePreset: "product",
+        topology: "game-ready",
+        textureDetail: "2k",
+      },
+      generatePromptInterpretation({
+        prompt: "A grounded bronze kettle with woven handle",
+        stylePreset: "product",
+        topology: "game-ready",
+        textureDetail: "2k",
+      }),
+    );
 
     const visited = [job.stage];
     for (let index = 0; index < STAGES.length; index += 1) {
@@ -107,9 +123,9 @@ describe("app state helpers", () => {
   });
 
   it("falls back to a safe state when persisted data is invalid", () => {
-    expect(normalizeState({ jobs: [{ id: "x", stage: "bad-stage" }] }).jobs[0].stage).toBe(
-      "queued",
-    );
+    expect(
+      normalizeState({ jobs: [{ id: "x", stage: "bad-stage" }] }).jobs[0].stage,
+    ).toBe("queued");
   });
 
   it("returns the default state when storage cannot be parsed", () => {
@@ -122,11 +138,21 @@ describe("app state helpers", () => {
 
   it("accepts only square images for calibration", () => {
     expect(validateCalibrationImage({ width: 128, height: 128 })).toBe("");
-    expect(validateCalibrationImage({ width: 128, height: 96 })).toContain("square image");
+    expect(validateCalibrationImage({ width: 128, height: 96 })).toContain(
+      "square image",
+    );
   });
 
   it("creates a perfect cube calibration job", () => {
-    const job = createCalibrationJob({ name: "square.svg" }, new Date("2026-03-01T10:00:00.000Z"));
+    const job = createCalibrationJobFromGeneration(
+      { name: "square.svg" },
+      generateCalibrationResult({
+        fileName: "square.svg",
+        width: 128,
+        height: 128,
+      }),
+      new Date("2026-03-01T10:00:00.000Z"),
+    );
 
     expect(job.summary).toBe("Perfect cube calibration - square.svg");
     expect(job.prompt).toContain("Perfect 3D cube calibration");
@@ -135,7 +161,15 @@ describe("app state helpers", () => {
 
   it("builds a calibration preview model", () => {
     const model = buildPreviewModel(
-      createCalibrationJob({ name: "square.svg" }, new Date("2026-03-01T10:00:00.000Z")),
+      createCalibrationJobFromGeneration(
+        { name: "square.svg" },
+        generateCalibrationResult({
+          fileName: "square.svg",
+          width: 128,
+          height: 128,
+        }),
+        new Date("2026-03-01T10:00:00.000Z"),
+      ),
     );
 
     expect(model.mode).toBe("calibration");
@@ -143,11 +177,22 @@ describe("app state helpers", () => {
     expect(model.stage).toContain("Queued");
   });
 
-  it("infers shape and material from the prompt", () => {
-    expect(inferShape("A frosted glass sphere with studio light")).toBe("sphere");
-    expect(inferShape("A brass lantern with warm glow")).toBe("cylinder");
-    expect(inferMaterial("A frosted glass sphere with studio light")).toBe("glass");
-    expect(inferMaterial("A walnut storage box")).toBe("wood");
+  it("interprets prompts into structured 3D generation output", () => {
+    const result = generatePromptInterpretation({
+      prompt: "A frosted glass sphere with studio light",
+      stylePreset: "product",
+      topology: "game-ready",
+      textureDetail: "2k",
+    });
+
+    expect(result.interpretation.shape).toBe("sphere");
+    expect(result.interpretation.material).toBe("glass");
+    expect(result.preview.shape).toBe("sphere");
+    expect(result.blenderScript).toContain("primitive_uv_sphere_add");
+  });
+
+  it("formats debug JSON for display", () => {
+    expect(prettyJson({ shape: "cube" })).toContain('"shape": "cube"');
   });
 });
 
@@ -157,43 +202,76 @@ describe("app DOM behavior", () => {
     mountDom();
   });
 
-  it("queues a job from the form and renders it", () => {
+  it("queues a job from the form and renders it", async () => {
     const storage = createStorage();
     const app = createApp({
       document,
       storage,
       clock: () => new Date("2026-03-01T10:00:00.000Z"),
+      apiClient: vi.fn().mockResolvedValue(
+        generatePromptInterpretation({
+          prompt:
+            "A lacquered tea tin with embossed cranes and brushed brass lid",
+          stylePreset: "stylized",
+          topology: "game-ready",
+          textureDetail: "2k",
+        }),
+      ),
     });
 
     document.querySelector("#prompt").value =
       "A lacquered tea tin with embossed cranes and brushed brass lid";
     document.querySelector("#stylePreset").value = "stylized";
-    document.querySelector("#job-form").dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    );
+    document
+      .querySelector("#job-form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
 
     expect(app.getState().jobs).toHaveLength(1);
-    expect(document.querySelector("#job-list").textContent).toContain("lacquered tea tin");
-    expect(document.querySelector("#active-job-badge").textContent).toBe("Queued");
-    expect(document.querySelector("#preview-subject").textContent).toContain("lacquered tea tin");
-    expect(document.querySelector("#preview-shape").textContent).toBe("Shape: cylinder");
-    expect(document.querySelector("#preview-material").textContent).toBe("Material: metal");
+    expect(document.querySelector("#job-list").textContent).toContain(
+      "lacquered tea tin",
+    );
+    expect(document.querySelector("#active-job-badge").textContent).toBe(
+      "Queued",
+    );
+    expect(document.querySelector("#preview-subject").textContent).toContain(
+      "lacquered tea tin",
+    );
+    expect(document.querySelector("#preview-shape").textContent).toBe(
+      "Shape: cylinder",
+    );
+    expect(document.querySelector("#preview-material").textContent).toBe(
+      "Material: metal",
+    );
+    expect(document.querySelector("#debug-script").textContent).toContain(
+      "primitive_cylinder_add",
+    );
     app.destroy();
   });
 
-  it("automatically advances the active job over time", () => {
+  it("automatically advances the active job over time", async () => {
     const storage = createStorage();
     const app = createApp({
       document,
       storage,
       clock: () => new Date("2026-03-01T10:00:00.000Z"),
+      apiClient: vi.fn().mockResolvedValue(
+        generatePromptInterpretation({
+          prompt:
+            "A museum-grade marble bust with delicate chipped edges and soft fill light",
+          stylePreset: "product",
+          topology: "game-ready",
+          textureDetail: "2k",
+        }),
+      ),
     });
 
     document.querySelector("#prompt").value =
       "A museum-grade marble bust with delicate chipped edges and soft fill light";
-    document.querySelector("#job-form").dispatchEvent(
-      new Event("submit", { bubbles: true, cancelable: true }),
-    );
+    document
+      .querySelector("#job-form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
 
     vi.advanceTimersByTime(2500);
 
@@ -241,6 +319,7 @@ describe("app DOM behavior", () => {
       document,
       storage,
       clock: () => new Date("2026-03-01T10:02:00.000Z"),
+      apiClient: vi.fn(),
     });
 
     document.querySelector("#clear-history").click();
@@ -257,21 +336,46 @@ describe("app DOM behavior", () => {
       storage,
       clock: () => new Date("2026-03-01T10:03:00.000Z"),
       inspectFile: vi.fn().mockResolvedValue({ width: 64, height: 64 }),
+      apiClient: vi.fn().mockResolvedValue(
+        generateCalibrationResult({
+          fileName: "square.svg",
+          width: 64,
+          height: 64,
+        }),
+      ),
     });
 
-    Object.defineProperty(document.querySelector("#calibrationImage"), "files", {
-      configurable: true,
-      value: [new File(["<svg></svg>"], "square.svg", { type: "image/svg+xml" })],
-    });
+    Object.defineProperty(
+      document.querySelector("#calibrationImage"),
+      "files",
+      {
+        configurable: true,
+        value: [
+          new File(["<svg></svg>"], "square.svg", { type: "image/svg+xml" }),
+        ],
+      },
+    );
 
     document.querySelector("#run-calibration").click();
     await Promise.resolve();
+    await Promise.resolve();
 
     expect(app.getState().jobs).toHaveLength(1);
-    expect(app.getState().jobs[0].summary).toBe("Perfect cube calibration - square.svg");
-    expect(document.querySelector("#calibration-feedback").textContent).toContain("square.svg");
-    expect(document.querySelector("#preview-mode").textContent).toBe("Live preview");
-    expect(document.querySelector("#preview-stage-label").textContent).toContain("Queued");
+    expect(app.getState().jobs[0].summary).toBe(
+      "Perfect cube calibration - square.svg",
+    );
+    expect(
+      document.querySelector("#calibration-feedback").textContent,
+    ).toContain("square.svg");
+    expect(document.querySelector("#preview-mode").textContent).toBe(
+      "Live preview",
+    );
+    expect(
+      document.querySelector("#preview-stage-label").textContent,
+    ).toContain("Queued");
+    expect(document.querySelector("#debug-script").textContent).toContain(
+      "primitive_cube_add",
+    );
     app.destroy();
   });
 });

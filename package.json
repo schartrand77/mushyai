@@ -4,6 +4,11 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build": "vite build",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "lint": "eslint .",
+    "check": "npm run lint && npm run format:check && npm run test",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
@@ -12,7 +17,12 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.51.1",
+    "@eslint/js": "^9.22.0",
+    "eslint": "^9.22.0",
+    "globals": "^16.0.0",
     "jsdom": "^26.1.0",
+    "prettier": "^3.5.3",
+    "vite": "^6.2.1",
     "vitest": "^3.2.4"
   }
 }

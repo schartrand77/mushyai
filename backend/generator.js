@@ -1,0 +1,288 @@
+function normalizePrompt(prompt) {
+  return String(prompt ?? "")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+function detectShape(prompt) {
+  const value = prompt.toLowerCase();
+
+  if (/(cube|box|square|dice)/.test(value)) return "cube";
+  if (/(sphere|orb|ball|planet)/.test(value)) return "sphere";
+  if (/(cylinder|can|pillar|column|tin|bottle|lantern|tower)/.test(value))
+    return "cylinder";
+  if (/(capsule|pill|vial)/.test(value)) return "capsule";
+  if (/(pyramid|cone|spire)/.test(value)) return "pyramid";
+  if (/(bust|head|statue|face)/.test(value)) return "bust";
+  if (/(kettle|teapot)/.test(value)) return "cylinder";
+  return "cube";
+}
+
+function detectMaterial(prompt) {
+  const value = prompt.toLowerCase();
+
+  if (/(glass|crystal|transparent|frosted)/.test(value)) return "glass";
+  if (/(bronze|brass|steel|metal|chrome|iron|gold|silver)/.test(value))
+    return "metal";
+  if (/(wood|oak|walnut|timber)/.test(value)) return "wood";
+  if (/(marble|stone|granite|rock|ceramic|clay)/.test(value)) return "stone";
+  return "default";
+}
+
+function detectLighting(prompt) {
+  const value = prompt.toLowerCase();
+
+  if (/(rim light|backlit|back light)/.test(value)) return "Rim lit";
+  if (/(studio|softbox|soft fill)/.test(value)) return "Studio soft light";
+  if (/(dramatic|moody|shadow)/.test(value)) return "Dramatic contrast";
+  if (/(sunset|golden hour|warm light)/.test(value))
+    return "Warm directional light";
+  return "Balanced key light";
+}
+
+function detectColorway(prompt) {
+  const value = prompt.toLowerCase();
+  const matches = [];
+  const colors = [
+    "amber",
+    "black",
+    "blue",
+    "brass",
+    "bronze",
+    "cream",
+    "gold",
+    "green",
+    "ivory",
+    "red",
+    "silver",
+    "white",
+  ];
+
+  colors.forEach((color) => {
+    if (value.includes(color)) {
+      matches.push(color);
+    }
+  });
+
+  return matches.length > 0 ? matches : ["neutral"];
+}
+
+function detectModifiers(prompt) {
+  const value = prompt.toLowerCase();
+  const modifiers = [];
+
+  if (/(embossed|engraved|etched)/.test(value))
+    modifiers.push("surface detail");
+  if (/(brushed|polished|gloss|glaze|lacquered)/.test(value))
+    modifiers.push("finish treatment");
+  if (/(worn|chipped|weathered)/.test(value)) modifiers.push("edge wear");
+  if (/(cutout|perforated|holes)/.test(value)) modifiers.push("negative space");
+  if (/(woven|rope|handle|strap)/.test(value))
+    modifiers.push("secondary attachment");
+
+  return modifiers;
+}
+
+function summarizePrompt(prompt) {
+  return prompt.length > 72 ? `${prompt.slice(0, 69)}...` : prompt;
+}
+
+function buildPalette(shape, material, colors) {
+  const basePalettes = {
+    cube: { accentA: "#ce7a36", accentB: "#48616f", accentC: "#fff4dd" },
+    sphere: { accentA: "#6ca0dc", accentB: "#1f334f", accentC: "#ebf7ff" },
+    cylinder: { accentA: "#cf8f52", accentB: "#334d5f", accentC: "#fff1df" },
+    capsule: { accentA: "#a57ac8", accentB: "#32465b", accentC: "#f7ebff" },
+    pyramid: { accentA: "#be7040", accentB: "#574135", accentC: "#fff0e4" },
+    bust: { accentA: "#a9aba6", accentB: "#3f4f59", accentC: "#f4f0ea" },
+  };
+
+  const palette = basePalettes[shape] ?? basePalettes.cube;
+
+  if (material === "glass") {
+    return { accentA: "#7db7e8", accentB: "#234763", accentC: "#eef9ff" };
+  }
+
+  if (material === "metal") {
+    return colors.includes("bronze") || colors.includes("brass")
+      ? { accentA: "#cb8348", accentB: "#3c4c58", accentC: "#fff0df" }
+      : { accentA: "#c9c7c2", accentB: "#465462", accentC: "#fbf7f2" };
+  }
+
+  if (material === "stone") {
+    return { accentA: "#c7b8a9", accentB: "#55626d", accentC: "#f6f1ea" };
+  }
+
+  return palette;
+}
+
+function blenderPrimitive(shape) {
+  switch (shape) {
+    case "sphere":
+      return "bpy.ops.mesh.primitive_uv_sphere_add(radius=1.0, segments=64, ring_count=32)";
+    case "cylinder":
+      return "bpy.ops.mesh.primitive_cylinder_add(radius=0.8, depth=2.2, vertices=48)";
+    case "capsule":
+      return "bpy.ops.mesh.primitive_cylinder_add(radius=0.7, depth=2.0, vertices=48)";
+    case "pyramid":
+      return "bpy.ops.mesh.primitive_cone_add(radius1=1.1, depth=1.8, vertices=4)";
+    case "bust":
+      return "bpy.ops.mesh.primitive_uv_sphere_add(radius=1.0, segments=64, ring_count=32)";
+    default:
+      return "bpy.ops.mesh.primitive_cube_add(size=2.0)";
+  }
+}
+
+function modifierComments(modifiers) {
+  if (!modifiers.length) {
+    return "# No extra modifiers inferred from prompt";
+  }
+
+  return modifiers.map((modifier) => `# modifier: ${modifier}`).join("\n");
+}
+
+export function generateBlenderScript({
+  prompt,
+  shape,
+  material,
+  topology,
+  textureDetail,
+  modifiers,
+  lighting,
+}) {
+  return `import bpy
+
+# Deterministic MushyAI build script
+PROMPT = ${JSON.stringify(prompt)}
+
+bpy.ops.object.select_all(action="SELECT")
+bpy.ops.object.delete(use_global=False)
+
+${blenderPrimitive(shape)}
+obj = bpy.context.active_object
+obj.name = "mushyai_asset"
+
+${modifierComments(modifiers)}
+# material: ${material}
+# topology: ${topology}
+# texture detail: ${textureDetail}
+# lighting: ${lighting}
+
+mat = bpy.data.materials.new(name="mushyai_material")
+mat.use_nodes = True
+obj.data.materials.append(mat)
+
+if ${JSON.stringify(material)} == "glass":
+    mat.diffuse_color = (0.72, 0.86, 0.98, 0.45)
+elif ${JSON.stringify(material)} == "metal":
+    mat.diffuse_color = (0.72, 0.63, 0.49, 1.0)
+elif ${JSON.stringify(material)} == "stone":
+    mat.diffuse_color = (0.74, 0.72, 0.68, 1.0)
+elif ${JSON.stringify(material)} == "wood":
+    mat.diffuse_color = (0.58, 0.36, 0.22, 1.0)
+else:
+    mat.diffuse_color = (0.78, 0.76, 0.73, 1.0)
+
+bpy.context.scene.render.engine = "CYCLES"
+`;
+}
+
+export function generatePromptInterpretation({
+  prompt,
+  stylePreset = "product",
+  topology = "game-ready",
+  textureDetail = "2k",
+}) {
+  const cleanPrompt = normalizePrompt(prompt);
+  const shape = detectShape(cleanPrompt);
+  const material = detectMaterial(cleanPrompt);
+  const lighting = detectLighting(cleanPrompt);
+  const colors = detectColorway(cleanPrompt);
+  const modifiers = detectModifiers(cleanPrompt);
+  const palette = buildPalette(shape, material, colors);
+  const summary = summarizePrompt(cleanPrompt);
+
+  const interpretation = {
+    prompt: cleanPrompt,
+    shape,
+    material,
+    lighting,
+    colorway: colors,
+    modifiers,
+    topology,
+    textureDetail,
+    stylePreset,
+  };
+
+  return {
+    type: "generation",
+    summary,
+    input: {
+      prompt: cleanPrompt,
+      stylePreset,
+      topology,
+      textureDetail,
+    },
+    interpretation,
+    preview: {
+      shape,
+      material,
+      palette,
+    },
+    blenderScript: generateBlenderScript({
+      prompt: cleanPrompt,
+      shape,
+      material,
+      topology,
+      textureDetail,
+      modifiers,
+      lighting,
+    }),
+  };
+}
+
+export function generateCalibrationResult({
+  fileName = "square-reference",
+  width,
+  height,
+}) {
+  return {
+    type: "calibration",
+    summary: `Perfect cube calibration - ${fileName}`,
+    input: {
+      fileName,
+      width,
+      height,
+    },
+    interpretation: {
+      shape: "cube",
+      material: "glass",
+      lighting: "Studio soft light",
+      colorway: ["white", "blue"],
+      modifiers: ["perfect proportions", "reference alignment"],
+      topology: "game-ready",
+      textureDetail: "2k",
+      stylePreset: "calibration",
+      width,
+      height,
+    },
+    preview: {
+      shape: "cube",
+      material: "glass",
+      palette: {
+        accentA: "#88b7ea",
+        accentB: "#224761",
+        accentC: "#eef8ff",
+      },
+    },
+    blenderScript: generateBlenderScript({
+      prompt: `Perfect 3D cube calibration generated from ${fileName}.`,
+      shape: "cube",
+      material: "glass",
+      topology: "game-ready",
+      textureDetail: "2k",
+      modifiers: ["perfect proportions", "reference alignment"],
+      lighting: "Studio soft light",
+    }),
+  };
+}

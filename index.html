@@ -25,7 +25,9 @@
         <aside class="hero-panel" aria-label="Workspace profile">
           <p class="panel-label">Workspace</p>
           <h2>Solo Operator</h2>
-          <p>Private mode enabled. Data stays in this browser via local storage.</p>
+          <p>
+            Private mode enabled. Data stays in this browser via local storage.
+          </p>
           <div class="profile-stats">
             <div>
               <span>Retention</span>
@@ -97,7 +99,8 @@
                 <p class="kicker">Calibration</p>
                 <h3 id="calibration-title">Square image to perfect cube</h3>
                 <p class="calibration-copy">
-                  Upload a square 2D reference image and queue a perfect cube calibration job.
+                  Upload a square 2D reference image and queue a perfect cube
+                  calibration job.
                 </p>
               </div>
               <label class="field">
@@ -110,8 +113,16 @@
                 />
               </label>
               <div class="calibration-actions">
-                <p id="calibration-feedback" class="feedback" aria-live="polite"></p>
-                <button type="button" class="secondary-button" id="run-calibration">
+                <p
+                  id="calibration-feedback"
+                  class="feedback"
+                  aria-live="polite"
+                ></p>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  id="run-calibration"
+                >
                   Calibrate cube
                 </button>
               </div>
@@ -153,7 +164,8 @@
                 <h3 id="preview-subject">Awaiting queue input</h3>
               </div>
               <p class="preview-copy" id="preview-copy">
-                Queue a concept or run the cube calibration to light up the display wall.
+                Queue a concept or run the cube calibration to light up the
+                display wall.
               </p>
               <div class="preview-specs">
                 <span id="preview-shape">No shape</span>
@@ -163,6 +175,35 @@
                 <span id="preview-stage-label">No stage</span>
               </div>
             </div>
+          </div>
+        </section>
+
+        <section class="card debug-card" aria-labelledby="debug-title">
+          <div class="section-head">
+            <div>
+              <p class="kicker">Debug</p>
+              <h2 id="debug-title">3D generation trace</h2>
+            </div>
+            <span class="badge">API-backed</span>
+          </div>
+          <div class="debug-grid">
+            <div class="debug-meta">
+              <p class="panel-label">Subject</p>
+              <h3 id="debug-subject">No generation data yet</h3>
+              <p class="preview-copy" id="debug-modifiers">
+                Awaiting prompt interpretation
+              </p>
+            </div>
+            <label class="debug-block">
+              <span>Interpreted spec</span>
+              <pre id="debug-json">{}</pre>
+            </label>
+            <label class="debug-block">
+              <span>Blender Python</span>
+              <pre id="debug-script">
+# Blender Python script will appear here.</pre
+              >
+            </label>
           </div>
         </section>
 
@@ -196,7 +237,11 @@
             >
               <span id="progress-fill"></span>
             </div>
-            <div class="pipeline" id="pipeline-stages" aria-label="Generation stages"></div>
+            <div
+              class="pipeline"
+              id="pipeline-stages"
+              aria-label="Generation stages"
+            ></div>
           </div>
         </section>
 

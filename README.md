@@ -1,14 +1,23 @@
 # mushyai
 
-Private single-user 3D generation control room built as a static vanilla web app.
+Private single-user 3D generation control room with a deterministic local backend, browser UI, and Docker-first deployment.
 
-The app also includes a calibration path: upload a square 2D image and it queues a perfect cube reference job so you can verify the pipeline against a known shape.
+The app includes:
+
+- Prompt-to-structured-3D interpretation through a local API
+- Debug output with interpreted spec JSON and generated Blender Python
+- Square-image calibration that queues a perfect cube reference job
+- Unit tests plus containerized Playwright browser tests against the built image
+- ESLint, Prettier, and a Vite production build
 
 ## Local development
 
 - `npm install`
+- `npm run lint`
+- `npm run format:check`
+- `npm run build`
 - `npm test`
-- Open `index.html` directly, or serve the repo with any static file server.
+- Start the backend and frontend stack with Docker, or serve the static frontend through a web server that can proxy `/api/` to the backend.
 
 ## Docker
 
@@ -16,9 +25,10 @@ The app also includes a calibration path: upload a square 2D image and it queues
 - Open: `http://YOUR_SERVER_IP:8080`
 - Change the external port with `MUSHYAI_PORT=8095 docker compose up -d --build`
 
-The container is intentionally simple:
+The stack is intentionally simple:
 
 - `nginx:alpine` serves the static files
+- A small Node backend exposes `/api/generate` and `/api/calibrate`
 - The container filesystem is read-only
 - Health checks run against the internal web endpoint
 - App data remains browser-local through `localStorage`, which fits the single-user design
@@ -46,4 +56,4 @@ Use Unraid's Compose Manager or the Docker Compose plugin and deploy this reposi
 3. Optionally set `MUSHYAI_PORT` in the stack environment if port `8080` is already in use.
 4. Start the stack and open `http://UNRAID_IP:MUSHYAI_PORT`.
 
-Because this app is private and intended for one user, there is no multi-user auth or shared backend. If you expose it beyond your LAN, put it behind your reverse proxy and access controls.
+Because this app is private and intended for one user, there is no multi-user auth or shared job store. If you expose it beyond your LAN, put it behind your reverse proxy and access controls.

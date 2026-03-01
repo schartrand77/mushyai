@@ -1,9 +1,18 @@
+FROM node:24-alpine AS build
+
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY index.html styles.css vite.config.js ./
+COPY src ./src
+RUN npm run build
+
 FROM nginx:1.29-alpine
 
 COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY index.html /usr/share/nginx/html/index.html
-COPY styles.css /usr/share/nginx/html/styles.css
-COPY src /usr/share/nginx/html/src
+COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 8080
 

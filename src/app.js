@@ -238,12 +238,48 @@ export function stringToPaletteSeed(input) {
   return [...input].reduce((total, character) => total + character.charCodeAt(0), 0);
 }
 
+export function inferShape(prompt) {
+  const value = prompt.toLowerCase();
+
+  if (/(cube|box|square)/.test(value)) return "cube";
+  if (/(sphere|orb|ball|planet)/.test(value)) return "sphere";
+  if (/(cylinder|can|pillar|column|tin|bottle|lantern)/.test(value)) return "cylinder";
+  if (/(capsule|pill|vial)/.test(value)) return "capsule";
+  if (/(pyramid|cone|spire)/.test(value)) return "pyramid";
+  if (/(bust|head|statue)/.test(value)) return "bust";
+  return "cube";
+}
+
+export function inferMaterial(prompt) {
+  const value = prompt.toLowerCase();
+
+  if (/(glass|crystal|transparent)/.test(value)) return "glass";
+  if (/(bronze|brass|steel|metal|chrome|iron|gold|silver)/.test(value)) return "metal";
+  if (/(wood|oak|walnut|timber)/.test(value)) return "wood";
+  if (/(marble|stone|granite|rock|ceramic|clay)/.test(value)) return "stone";
+  return "default";
+}
+
+export function inferLighting(prompt) {
+  const value = prompt.toLowerCase();
+
+  if (/(rim light|backlit|back light)/.test(value)) return "Rim lit";
+  if (/(studio|softbox|soft fill)/.test(value)) return "Studio soft light";
+  if (/(dramatic|moody|shadow)/.test(value)) return "Dramatic contrast";
+  if (/(sunset|golden hour|warm light)/.test(value)) return "Warm directional light";
+  return "Balanced key light";
+}
+
 export function buildPreviewModel(job) {
   if (!job) {
     return {
       mode: "idle",
+      shape: "cube",
+      material: "default",
       subject: "Awaiting queue input",
       copy: "Queue a concept or run the cube calibration to light up the display wall.",
+      shapeLabel: "No shape",
+      materialLabel: "No material",
       style: "No style",
       topology: "No topology",
       stage: "No stage",
@@ -257,14 +293,21 @@ export function buildPreviewModel(job) {
   const warm = 28 + (seed % 30);
   const cool = 190 + (seed % 35);
   const deep = 20 + (seed % 12);
+  const shape = job.stylePreset === "calibration" ? "cube" : inferShape(job.prompt);
+  const material = job.stylePreset === "calibration" ? "glass" : inferMaterial(job.prompt);
+  const lighting = inferLighting(job.prompt);
 
   return {
     mode: getPreviewMode(job),
+    shape,
+    material,
     subject: job.summary,
     copy:
       job.stylePreset === "calibration"
         ? "Square reference locked. Preview tuned for a mathematically clean calibration cube."
-        : "Display wall tuned for high-resolution inspection with volumetric light and material contrast.",
+        : `${lighting}. Preview geometry biased toward ${shape} form cues from the prompt.`,
+    shapeLabel: `Shape: ${shape}`,
+    materialLabel: `Material: ${material}`,
     style: `Style: ${job.stylePreset}`,
     topology: `Topology: ${job.topology}`,
     stage: `Stage: ${stageLabel(job.stage)}`,
@@ -344,6 +387,8 @@ export function createApp({
     previewMode: document.querySelector("#preview-mode"),
     previewSubject: document.querySelector("#preview-subject"),
     previewCopy: document.querySelector("#preview-copy"),
+    previewShape: document.querySelector("#preview-shape"),
+    previewMaterial: document.querySelector("#preview-material"),
     previewStyle: document.querySelector("#preview-style"),
     previewTopology: document.querySelector("#preview-topology"),
     previewStageLabel: document.querySelector("#preview-stage-label"),
@@ -446,12 +491,16 @@ export function createApp({
     const preview = buildPreviewModel(activeJob);
     elements.feedback.textContent = state.lastMessage;
     elements.previewScene.dataset.mode = preview.mode;
+    elements.previewScene.dataset.shape = preview.shape;
+    elements.previewScene.dataset.material = preview.material;
     elements.previewScene.style.setProperty("--preview-a", preview.accentA);
     elements.previewScene.style.setProperty("--preview-b", preview.accentB);
     elements.previewScene.style.setProperty("--preview-c", preview.accentC);
     elements.previewMode.textContent = preview.mode === "idle" ? "Idle" : "Live preview";
     elements.previewSubject.textContent = preview.subject;
     elements.previewCopy.textContent = preview.copy;
+    elements.previewShape.textContent = preview.shapeLabel;
+    elements.previewMaterial.textContent = preview.materialLabel;
     elements.previewStyle.textContent = preview.style;
     elements.previewTopology.textContent = preview.topology;
     elements.previewStageLabel.textContent = preview.stage;

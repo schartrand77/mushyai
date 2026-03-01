@@ -7,6 +7,8 @@ import {
   createCalibrationJob,
   createInitialState,
   createJob,
+  inferMaterial,
+  inferShape,
   inspectImageFile,
   loadState,
   normalizeState,
@@ -50,6 +52,8 @@ function mountDom() {
       <span id="preview-mode"></span>
       <h3 id="preview-subject"></h3>
       <p id="preview-copy"></p>
+      <span id="preview-shape"></span>
+      <span id="preview-material"></span>
       <span id="preview-style"></span>
       <span id="preview-topology"></span>
       <span id="preview-stage-label"></span>
@@ -138,6 +142,13 @@ describe("app state helpers", () => {
     expect(model.subject).toContain("square.svg");
     expect(model.stage).toContain("Queued");
   });
+
+  it("infers shape and material from the prompt", () => {
+    expect(inferShape("A frosted glass sphere with studio light")).toBe("sphere");
+    expect(inferShape("A brass lantern with warm glow")).toBe("cylinder");
+    expect(inferMaterial("A frosted glass sphere with studio light")).toBe("glass");
+    expect(inferMaterial("A walnut storage box")).toBe("wood");
+  });
 });
 
 describe("app DOM behavior", () => {
@@ -165,6 +176,8 @@ describe("app DOM behavior", () => {
     expect(document.querySelector("#job-list").textContent).toContain("lacquered tea tin");
     expect(document.querySelector("#active-job-badge").textContent).toBe("Queued");
     expect(document.querySelector("#preview-subject").textContent).toContain("lacquered tea tin");
+    expect(document.querySelector("#preview-shape").textContent).toBe("Shape: cylinder");
+    expect(document.querySelector("#preview-material").textContent).toBe("Material: metal");
     app.destroy();
   });
 

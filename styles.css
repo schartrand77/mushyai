@@ -331,6 +331,67 @@ button:hover {
   animation: preview-spin 18s linear infinite;
 }
 
+.preview-stage[data-shape="sphere"] .preview-object {
+  border-radius: 50%;
+}
+
+.preview-stage[data-shape="sphere"] .preview-face {
+  border-radius: 50%;
+}
+
+.preview-stage[data-shape="cylinder"] .preview-object {
+  width: 128px;
+  height: 182px;
+}
+
+.preview-stage[data-shape="cylinder"] .preview-face,
+.preview-stage[data-shape="capsule"] .preview-face {
+  border-radius: 999px;
+}
+
+.preview-stage[data-shape="capsule"] .preview-object {
+  width: 122px;
+  height: 210px;
+}
+
+.preview-stage[data-shape="pyramid"] .preview-object {
+  width: 150px;
+  height: 150px;
+}
+
+.preview-stage[data-shape="pyramid"] .preview-face {
+  clip-path: polygon(50% 0%, 100% 100%, 0% 100%);
+  border-radius: 0;
+}
+
+.preview-stage[data-material="glass"] .preview-face {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.82), rgba(180, 222, 255, 0.08)),
+    linear-gradient(180deg, rgba(188, 229, 255, 0.44), rgba(46, 97, 128, 0.14));
+}
+
+.preview-stage[data-material="metal"] .preview-face {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.8), rgba(215, 210, 199, 0.08)),
+    linear-gradient(180deg, rgba(245, 236, 218, 0.52), rgba(95, 98, 105, 0.2));
+}
+
+.preview-stage[data-material="wood"] .preview-face {
+  background:
+    linear-gradient(135deg, rgba(255, 244, 229, 0.72), rgba(130, 74, 38, 0.18)),
+    repeating-linear-gradient(
+      90deg,
+      rgba(126, 73, 39, 0.22) 0 8px,
+      rgba(177, 113, 65, 0.16) 8px 16px
+    );
+}
+
+.preview-stage[data-material="stone"] .preview-face {
+  background:
+    linear-gradient(135deg, rgba(255, 255, 255, 0.62), rgba(138, 145, 150, 0.16)),
+    linear-gradient(180deg, rgba(214, 218, 222, 0.6), rgba(90, 99, 108, 0.22));
+}
+
 .preview-face {
   position: absolute;
   inset: 0;

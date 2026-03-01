@@ -28,6 +28,8 @@ test.describe("mushyai docker app", () => {
     await expect(page.locator("#active-job-badge")).toHaveText("Queued");
     await expect(page.locator("#job-list")).toContainText("A hand-thrown ceramic lantern");
     await expect(page.locator("#preview-subject")).toContainText("A hand-thrown ceramic lantern");
+    await expect(page.locator("#preview-shape")).toHaveText("Shape: cylinder");
+    await expect(page.locator("#preview-material")).toHaveText("Material: stone");
 
     await expect.poll(async () => page.locator("#active-progress").textContent()).toBe("20%");
     await expect(page.locator("#pipeline-stages")).toContainText("Input cleanup");

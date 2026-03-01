@@ -68,6 +68,7 @@ export function createJobFromGeneration(values, generation, now = new Date()) {
     progress: STAGES[0].progress,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
+    isFavorite: false,
     result: generation ?? null,
   };
 }
@@ -95,6 +96,7 @@ export function createCalibrationJobFromGeneration(
     progress: STAGES[0].progress,
     createdAt: now.toISOString(),
     updatedAt: now.toISOString(),
+    isFavorite: false,
     result: generation ?? null,
   };
 }
@@ -159,6 +161,7 @@ function normalizeJob(job) {
       typeof job.progress === "number"
         ? Math.max(0, Math.min(100, job.progress))
         : STAGES[safeStageIndex].progress,
+    isFavorite: job.isFavorite ?? false,
     result: job.result && typeof job.result === "object" ? job.result : null,
   };
 }
@@ -219,6 +222,17 @@ export function reducer(state, action) {
         jobs: nextJobs,
         activeJobId: action.job.id,
         lastMessage: action.message ?? "Job queued. Pipeline started.",
+      };
+    }
+    case "jobFavorited": {
+      const nextJobs = state.jobs.map((job) =>
+        job.id === action.jobId
+          ? { ...job, isFavorite: !job.isFavorite }
+          : job,
+      );
+      return {
+        ...state,
+        jobs: nextJobs,
       };
     }
     case "jobAdvanced": {

@@ -763,3 +763,29 @@ button:hover {
     transform: translate(-50%, -54%) rotateX(-26deg) rotateY(396deg);
   }
 }
+
+.favorite-button {
+  background: transparent;
+  padding: 4px;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.favorite-button:hover {
+  background: rgba(161, 77, 33, 0.1);
+}
+
+.favorite-button svg {
+  stroke: var(--accent);
+  fill: none;
+  width: 20px;
+  height: 20px;
+}
+
+.is-favorite .favorite-button svg {
+  fill: var(--accent);
+}

@@ -70,7 +70,7 @@ export function createApp({
   }
 
   function render() {
-    renderAppView(elements, state, getActiveJob());
+    renderAppView(elements, state, getActiveJob(), dispatch);
   }
 
   function syncTimer() {

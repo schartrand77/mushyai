@@ -55,6 +55,10 @@ export function buildPreviewModel(job) {
   const material = preview.material ?? interpretation.material ?? "default";
   const lighting = interpretation.lighting ?? "Balanced key light";
   const mode = job.stylePreset === "calibration" ? "calibration" : "concept";
+  const stage =
+    job.stage === "draft"
+      ? "Stage: Draft interpretation"
+      : `Stage: ${stageLabel(job.stage)}`;
 
   return {
     mode,
@@ -69,7 +73,7 @@ export function buildPreviewModel(job) {
     materialLabel: `Material: ${material}`,
     style: `Style: ${titleCase(job.stylePreset)}`,
     topology: `Topology: ${titleCase(job.topology)}`,
-    stage: `Stage: ${stageLabel(job.stage)}`,
+    stage,
     accentA: preview.palette?.accentA ?? `hsl(${warm} 74% 58%)`,
     accentB: preview.palette?.accentB ?? `hsl(${cool} 30% 37%)`,
     accentC: preview.palette?.accentC ?? `hsl(${deep} 100% 92%)`,

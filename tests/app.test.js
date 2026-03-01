@@ -249,6 +249,52 @@ describe("app DOM behavior", () => {
     app.destroy();
   });
 
+  it("renders a live draft interpretation from prompt input before queueing", async () => {
+    const storage = createStorage();
+    const apiClient = vi.fn().mockResolvedValue(
+      generatePromptInterpretation({
+        prompt: "A frosted glass sphere with studio light",
+        stylePreset: "product",
+        topology: "game-ready",
+        textureDetail: "2k",
+      }),
+    );
+    const app = createApp({
+      document,
+      storage,
+      apiClient,
+    });
+
+    document.querySelector("#prompt").value =
+      "A frosted glass sphere with studio light";
+    document
+      .querySelector("#prompt")
+      .dispatchEvent(new Event("input", { bubbles: true }));
+
+    vi.advanceTimersByTime(250);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(apiClient).toHaveBeenCalledTimes(1);
+    expect(document.querySelector("#preview-mode").textContent).toBe(
+      "Live preview",
+    );
+    expect(document.querySelector("#preview-subject").textContent).toContain(
+      "A frosted glass sphere",
+    );
+    expect(document.querySelector("#preview-shape").textContent).toBe(
+      "Shape: sphere",
+    );
+    expect(document.querySelector("#preview-stage-label").textContent).toBe(
+      "Stage: Draft interpretation",
+    );
+    expect(document.querySelector("#debug-script").textContent).toContain(
+      "primitive_uv_sphere_add",
+    );
+
+    app.destroy();
+  });
+
   it("automatically advances the active job over time", async () => {
     const storage = createStorage();
     const app = createApp({

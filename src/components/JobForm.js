@@ -25,6 +25,27 @@ export function bindJobForm(elements, onSubmit) {
   };
 }
 
+export function bindPromptDraftInputs(elements, onInput) {
+  const controls = [
+    elements.prompt,
+    elements.stylePreset,
+    elements.topology,
+    elements.textureDetail,
+  ];
+
+  controls.forEach((control) => {
+    control.addEventListener("input", onInput);
+    control.addEventListener("change", onInput);
+  });
+
+  return () => {
+    controls.forEach((control) => {
+      control.removeEventListener("input", onInput);
+      control.removeEventListener("change", onInput);
+    });
+  };
+}
+
 export function bindCalibration(elements, onCalibration) {
   elements.runCalibration.addEventListener("click", onCalibration);
 

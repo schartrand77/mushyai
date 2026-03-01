@@ -5,8 +5,9 @@ import { renderPipeline } from "./Pipeline.js";
 import { renderPreview } from "./Preview.js";
 
 export function renderAppView(elements, state, activeJob, dispatch) {
-  renderPreview(elements, buildPreviewModel(activeJob));
-  renderDebug(elements, buildDebugModel(activeJob));
+  const renderTarget = activeJob ?? state.draftJob ?? null;
+  renderPreview(elements, buildPreviewModel(renderTarget));
+  renderDebug(elements, buildDebugModel(renderTarget));
   renderJobs(elements, state, dispatch);
   renderPipeline(elements, activeJob);
   elements.feedback.textContent = state.lastMessage;

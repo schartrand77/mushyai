@@ -77,6 +77,7 @@ describe("app state helpers", () => {
         textureDetail: "2k",
       },
       jobs: [],
+      draftJob: null,
       activeJobId: null,
       lastMessage: "Ready for a new prompt.",
     });

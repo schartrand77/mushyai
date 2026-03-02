@@ -33,12 +33,13 @@ export function buildPreviewModel(job) {
       shape: "cube",
       material: "default",
       subject: "Awaiting queue input",
-      copy: "Queue a concept or run the cube calibration to light up the display wall.",
+      copy: "Queue a concept to generate a model package and light up the display wall.",
       shapeLabel: "No shape",
       materialLabel: "No material",
       style: "No style",
       topology: "No topology",
       stage: "No stage",
+      canDownload: false,
       accentA: "#d8843d",
       accentB: "#4d6a7d",
       accentC: "#fff2d9",
@@ -54,10 +55,12 @@ export function buildPreviewModel(job) {
   const shape = preview.shape ?? interpretation.shape ?? "cube";
   const material = preview.material ?? interpretation.material ?? "default";
   const lighting = interpretation.lighting ?? "Balanced key light";
-  const mode = job.stylePreset === "calibration" ? "calibration" : "concept";
+  const mode = job.stage === "complete" ? "delivered" : "concept";
   const stage =
     job.stage === "draft"
       ? "Stage: Draft interpretation"
+      : job.stage === "complete"
+        ? "Stage: Delivered model"
       : `Stage: ${stageLabel(job.stage)}`;
 
   return {
@@ -66,14 +69,15 @@ export function buildPreviewModel(job) {
     material,
     subject: job.summary,
     copy:
-      job.stylePreset === "calibration"
-        ? "Square reference locked. Preview tuned for a mathematically clean calibration cube."
+      job.stage === "complete"
+        ? `${lighting}. Delivered model package is pinned here until you clear it.`
         : `${lighting}. Preview geometry biased toward ${shape} form cues from the interpreted prompt.`,
     shapeLabel: `Shape: ${shape}`,
     materialLabel: `Material: ${material}`,
     style: `Style: ${titleCase(job.stylePreset)}`,
     topology: `Topology: ${titleCase(job.topology)}`,
     stage,
+    canDownload: Boolean(job.result?.delivery?.content),
     accentA: preview.palette?.accentA ?? `hsl(${warm} 74% 58%)`,
     accentB: preview.palette?.accentB ?? `hsl(${cool} 30% 37%)`,
     accentC: preview.palette?.accentC ?? `hsl(${deep} 100% 92%)`,

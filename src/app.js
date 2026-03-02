@@ -3,17 +3,15 @@ import { renderAppView } from "./components/AppView.js";
 import { queryElements } from "./components/elements.js";
 import { bindHistoryControls } from "./components/HistoryControls.js";
 import {
-  bindCalibration,
   bindJobForm,
+  bindPromptDraftInputs,
   readFormValues,
   resetForm,
 } from "./components/JobForm.js";
 import { renderSuggestions } from "./components/Suggestions.js";
-import { inspectImageFile, validateCalibrationImage } from "./media.js";
 import { buildPreviewModel } from "./models.js";
 import {
   advanceJob,
-  createCalibrationJobFromGeneration,
   createInitialState,
   createJobFromGeneration,
   formatDate,
@@ -35,13 +33,11 @@ import { getFavoriteKeywords } from "./suggestions.js";
 export {
   advanceJob,
   buildPreviewModel,
-  createCalibrationJobFromGeneration,
   createInitialState,
   createJobFromGeneration,
   defaultApiClient,
   formatDate,
   getStageIndex,
-  inspectImageFile,
   loadState,
   normalizeState,
   prettyJson,
@@ -52,7 +48,6 @@ export {
   STORAGE_KEY,
   STAGES,
   summarizePrompt,
-  validateCalibrationImage,
   validatePrompt,
 };
 
@@ -60,12 +55,13 @@ export function createApp({
   document,
   storage = window.localStorage,
   clock = () => new Date(),
-  inspectFile = inspectImageFile,
   apiClient = defaultApiClient,
 }) {
   const elements = queryElements(document);
   let state = loadState(storage);
   let timer = null;
+  let draftTimer = null;
+  let lastDownloadUrl = null;
 
   function getActiveJob() {
     return state.jobs.find((job) => job.id === state.activeJobId) ?? null;
@@ -108,6 +104,73 @@ export function createApp({
     syncTimer();
   }
 
+  function queueDraftGeneration() {
+    const values = readFormValues(elements);
+    const error = validatePrompt(values.prompt);
+
+    dispatch({
+      type: "fieldChanged",
+      name: "prompt",
+      value: values.prompt,
+    });
+
+    if (error) {
+      dispatch({ type: "draftChanged", job: null });
+      return;
+    }
+
+    if (draftTimer) {
+      clearTimeout(draftTimer);
+    }
+
+    draftTimer = setTimeout(async () => {
+      try {
+        const generation = await apiClient("/api/generate", values);
+        const draftJob = {
+          id: "draft-preview",
+          prompt: values.prompt.trim(),
+          summary: generation.summary,
+          stylePreset: values.stylePreset,
+          topology: values.topology,
+          textureDetail: values.textureDetail,
+          stage: "draft",
+          progress: 0,
+          createdAt: clock().toISOString(),
+          updatedAt: clock().toISOString(),
+          isFavorite: false,
+          result: generation,
+        };
+        dispatch({ type: "draftChanged", job: draftJob });
+      } catch {
+        dispatch({ type: "draftChanged", job: null });
+      }
+    }, 220);
+  }
+
+  function downloadPreviewModel() {
+    const activeJob = getActiveJob();
+    const previewJob = activeJob ?? state.draftJob ?? state.previewJob;
+    const delivery = previewJob?.result?.delivery;
+
+    if (!delivery?.content) {
+      return;
+    }
+
+    if (lastDownloadUrl) {
+      URL.revokeObjectURL(lastDownloadUrl);
+    }
+
+    const blob = new Blob([delivery.content], {
+      type: delivery.mimeType ?? "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    lastDownloadUrl = url;
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = delivery.fileName ?? "mushyai-model.json";
+    link.click();
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     const values = readFormValues(elements);
@@ -143,46 +206,14 @@ export function createApp({
     }
   }
 
-  async function handleCalibration() {
-    const file = elements.calibrationImage.files?.[0];
-
-    elements.runCalibration.disabled = true;
-    elements.calibrationFeedback.textContent = "";
-
-    try {
-      const metadata = await inspectFile(file);
-      const validationError = validateCalibrationImage(metadata);
-
-      if (validationError) {
-        elements.calibrationFeedback.textContent = validationError;
-        return;
-      }
-
-      const generation = await apiClient("/api/calibrate", {
-        fileName: file.name,
-        width: metadata.width,
-        height: metadata.height,
-      });
-      const job = createCalibrationJobFromGeneration(file, generation, clock());
-      dispatch({
-        type: "jobQueued",
-        job,
-        message: "Calibration queued. Perfect cube reference locked.",
-      });
-      elements.calibrationFeedback.textContent = `Calibration queued from ${file.name}.`;
-      elements.calibrationImage.value = "";
-    } catch (error) {
-      elements.calibrationFeedback.textContent = error.message;
-    } finally {
-      elements.runCalibration.disabled = false;
-    }
-  }
-
   const unbindJobForm = bindJobForm(elements, handleSubmit);
-  const unbindCalibration = bindCalibration(elements, handleCalibration);
-  const unbindHistory = bindHistoryControls(elements, () =>
-    dispatch({ type: "clearCompleted" }),
+  const unbindDraftInputs = bindPromptDraftInputs(elements, queueDraftGeneration);
+  const unbindHistory = bindHistoryControls(
+    elements,
+    () => dispatch({ type: "clearCompleted" }),
+    () => dispatch({ type: "previewCleared" }),
   );
+  elements.downloadModel.addEventListener("click", downloadPreviewModel);
 
   render();
   syncTimer();
@@ -193,9 +224,16 @@ export function createApp({
       if (timer) {
         clearInterval(timer);
       }
+      if (draftTimer) {
+        clearTimeout(draftTimer);
+      }
+      if (lastDownloadUrl) {
+        URL.revokeObjectURL(lastDownloadUrl);
+      }
       unbindJobForm();
-      unbindCalibration();
+      unbindDraftInputs();
       unbindHistory();
+      elements.downloadModel.removeEventListener("click", downloadPreviewModel);
     },
   };
 }

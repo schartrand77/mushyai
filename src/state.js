@@ -21,6 +21,8 @@ export function createInitialState() {
     form: { ...DEFAULT_FORM },
     jobs: [],
     activeJobId: null,
+    draftJob: null,
+    previewJob: null,
     lastMessage: "Ready for a new prompt.",
   };
 }
@@ -64,34 +66,6 @@ export function createJobFromGeneration(values, generation, now = new Date()) {
     stylePreset: values.stylePreset,
     topology: values.topology,
     textureDetail: values.textureDetail,
-    stage: "queued",
-    progress: STAGES[0].progress,
-    createdAt: now.toISOString(),
-    updatedAt: now.toISOString(),
-    isFavorite: false,
-    result: generation ?? null,
-  };
-}
-
-export function createCalibrationJobFromGeneration(
-  file,
-  generation,
-  now = new Date(),
-) {
-  const fileName =
-    file?.name ?? generation?.input?.fileName ?? "square-reference";
-  const summary =
-    typeof generation?.summary === "string" && generation.summary.trim()
-      ? generation.summary.trim()
-      : `Perfect cube calibration - ${fileName}`;
-
-  return {
-    id: `job-${now.getTime()}`,
-    prompt: `Perfect 3D cube calibration generated from ${fileName}.`,
-    summary,
-    stylePreset: "calibration",
-    topology: "game-ready",
-    textureDetail: "2k",
     stage: "queued",
     progress: STAGES[0].progress,
     createdAt: now.toISOString(),
@@ -166,6 +140,14 @@ function normalizeJob(job) {
   };
 }
 
+function normalizePreviewJob(job) {
+  if (!job || typeof job !== "object" || typeof job.id !== "string") {
+    return null;
+  }
+
+  return normalizeJob(job);
+}
+
 export function normalizeState(input) {
   const base = createInitialState();
 
@@ -196,6 +178,8 @@ export function normalizeState(input) {
       )
         ? input.activeJobId
         : null,
+    draftJob: normalizePreviewJob(input.draftJob),
+    previewJob: normalizePreviewJob(input.previewJob),
     lastMessage:
       typeof input.lastMessage === "string" && input.lastMessage
         ? input.lastMessage
@@ -215,12 +199,18 @@ export function reducer(state, action) {
           [action.name]: action.value,
         },
       };
+    case "draftChanged":
+      return {
+        ...state,
+        draftJob: action.job ?? null,
+      };
     case "jobQueued": {
       const nextJobs = sortJobs([action.job, ...state.jobs]);
       return {
         ...state,
         jobs: nextJobs,
         activeJobId: action.job.id,
+        draftJob: null,
         lastMessage: action.message ?? "Job queued. Pipeline started.",
       };
     }
@@ -247,6 +237,8 @@ export function reducer(state, action) {
         ...state,
         jobs: nextJobs,
         activeJobId: stillActive,
+        previewJob:
+          action.job.stage === "complete" ? normalizeJob(action.job) : state.previewJob,
         lastMessage:
           action.job.stage === "complete"
             ? "Job complete. Asset is ready for export."
@@ -257,6 +249,17 @@ export function reducer(state, action) {
       return {
         ...state,
         lastMessage: action.message,
+      };
+    case "previewPinned":
+      return {
+        ...state,
+        previewJob: action.job ? normalizeJob(action.job) : state.previewJob,
+      };
+    case "previewCleared":
+      return {
+        ...state,
+        previewJob: null,
+        lastMessage: "Preview cleared.",
       };
     case "clearCompleted":
       return {

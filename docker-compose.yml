@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
-      - "${MUSHYAI_PORT:-8080}:8080"
+      - "${MUSHYAI_PORT:-8081}:8080"
     healthcheck:
       test:
         ["CMD-SHELL", "wget -q -O /dev/null http://127.0.0.1:8080/ || exit 1"]

@@ -259,6 +259,11 @@ button:hover {
   background: var(--accent-strong);
 }
 
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
 .secondary-button {
   background: transparent;
   color: var(--accent-strong);
@@ -462,26 +467,15 @@ button:hover {
   transform: rotateX(-90deg) translateZ(75px);
 }
 
-.preview-stage[data-mode="calibration"] .preview-object {
-  width: 170px;
-  height: 170px;
-}
-
-.preview-stage[data-mode="calibration"] .preview-face {
-  border-style: solid;
-  background:
-    linear-gradient(
-      135deg,
-      rgba(255, 255, 255, 0.72),
-      rgba(255, 255, 255, 0.02)
-    ),
-    linear-gradient(180deg, rgba(229, 244, 255, 0.58), rgba(81, 146, 199, 0.2));
-}
-
 .preview-stage[data-mode="idle"] .preview-object {
   width: 124px;
   height: 124px;
   opacity: 0.72;
+}
+
+.preview-stage[data-mode="delivered"] .preview-object {
+  width: 164px;
+  height: 164px;
 }
 
 .preview-shadow {
@@ -509,6 +503,11 @@ button:hover {
 .preview-specs {
   display: flex;
   flex-wrap: wrap;
+  gap: 10px;
+}
+
+.preview-actions {
+  display: flex;
   gap: 10px;
 }
 
@@ -700,27 +699,6 @@ button:hover {
   }
 }
 
-.calibration-panel {
-  display: grid;
-  gap: 14px;
-  padding: 18px;
-  border: 1px solid var(--line);
-  border-radius: 20px;
-  background: rgba(255, 250, 241, 0.76);
-}
-
-.calibration-copy {
-  margin-bottom: 0;
-  color: var(--muted);
-}
-
-.calibration-actions {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: center;
-}
-
 @media (max-width: 700px) {
   .page-shell {
     padding-inline: 14px;
@@ -734,7 +712,7 @@ button:hover {
 
   .field-grid,
   .form-actions,
-  .calibration-actions,
+  .preview-actions,
   .preview-specs,
   .profile-stats,
   .job-item-header,

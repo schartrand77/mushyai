@@ -59,7 +59,7 @@
                 name="prompt"
                 rows="5"
                 maxlength="280"
-                placeholder="Describe the object, mood, materials, and camera angle."
+                placeholder="Describe the subject, silhouette, materials, lighting, and surface details you want delivered."
                 required
               ></textarea>
             </label>
@@ -92,40 +92,6 @@
                   <option value="8k">8K</option>
                 </select>
               </label>
-            </div>
-
-            <div class="calibration-panel" aria-labelledby="calibration-title">
-              <div>
-                <p class="kicker">Calibration</p>
-                <h3 id="calibration-title">Square image to perfect cube</h3>
-                <p class="calibration-copy">
-                  Upload a square 2D reference image and queue a perfect cube
-                  calibration job.
-                </p>
-              </div>
-              <label class="field">
-                <span>Reference image</span>
-                <input
-                  id="calibrationImage"
-                  name="calibrationImage"
-                  type="file"
-                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                />
-              </label>
-              <div class="calibration-actions">
-                <p
-                  id="calibration-feedback"
-                  class="feedback"
-                  aria-live="polite"
-                ></p>
-                <button
-                  type="button"
-                  class="secondary-button"
-                  id="run-calibration"
-                >
-                  Calibrate cube
-                </button>
-              </div>
             </div>
 
             <div class="form-actions">
@@ -166,9 +132,27 @@
                 <h3 id="preview-subject">Awaiting queue input</h3>
               </div>
               <p class="preview-copy" id="preview-copy">
-                Queue a concept or run the cube calibration to light up the
+                Queue a concept to generate a model package and light up the
                 display wall.
               </p>
+              <div class="preview-actions">
+                <button
+                  type="button"
+                  class="secondary-button"
+                  id="download-model"
+                  disabled
+                >
+                  Download model
+                </button>
+                <button
+                  type="button"
+                  class="secondary-button"
+                  id="clear-preview"
+                  disabled
+                >
+                  Clear preview
+                </button>
+              </div>
               <div class="preview-specs">
                 <span id="preview-shape">No shape</span>
                 <span id="preview-material">No material</span>

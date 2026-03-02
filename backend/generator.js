@@ -4,6 +4,14 @@ function normalizePrompt(prompt) {
     .replace(/\s+/g, " ");
 }
 
+function extractSubject(prompt) {
+  const cleaned = normalizePrompt(prompt)
+    .replace(/^[Aa]n?\s+/, "")
+    .replace(/^the\s+/i, "");
+
+  return cleaned || "generated-asset";
+}
+
 function detectShape(prompt) {
   const value = prompt.toLowerCase();
 
@@ -87,6 +95,59 @@ function summarizePrompt(prompt) {
   return prompt.length > 72 ? `${prompt.slice(0, 69)}...` : prompt;
 }
 
+function buildPromptPackage(prompt, interpretation) {
+  const tones = [];
+
+  if (interpretation.material !== "default") {
+    tones.push(`${interpretation.material} material response`);
+  }
+
+  if (interpretation.colorway.length > 0) {
+    tones.push(`${interpretation.colorway.join(", ")} color direction`);
+  }
+
+  tones.push(`${interpretation.lighting} lighting`);
+  tones.push(`${interpretation.topology} topology`);
+  tones.push(`${interpretation.textureDetail} texture budget`);
+
+  return [
+    `Primary subject: ${extractSubject(prompt)}`,
+    `Render intent: ${interpretation.stylePreset}`,
+    `Spatial form: ${interpretation.shape}`,
+    `Art direction: ${tones.join(" | ")}`,
+    interpretation.modifiers.length
+      ? `Surface notes: ${interpretation.modifiers.join(", ")}`
+      : "Surface notes: keep forms clean and readable",
+    "Delivery goal: export a production-ready preview model with consistent silhouette and material separation.",
+  ].join("\n");
+}
+
+function buildDeliveryPackage(summary, prompt, interpretation, blenderScript) {
+  const safeBaseName = summarizePrompt(summary)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+  const fileName = `${safeBaseName || "mushyai-model"}.json`;
+
+  return {
+    fileName,
+    mimeType: "application/json",
+    content: JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        summary,
+        prompt,
+        promptPackage: buildPromptPackage(prompt, interpretation),
+        interpretation,
+        blenderScript,
+      },
+      null,
+      2,
+    ),
+  };
+}
+
 function buildPalette(shape, material, colors) {
   const basePalettes = {
     cube: { accentA: "#ce7a36", accentB: "#48616f", accentC: "#fff4dd" },
@@ -139,6 +200,19 @@ function modifierComments(modifiers) {
   }
 
   return modifiers.map((modifier) => `# modifier: ${modifier}`).join("\n");
+}
+
+function titleFromStyle(stylePreset) {
+  switch (stylePreset) {
+    case "stylized":
+      return "Stylized";
+    case "hard-surface":
+      return "Hard-surface";
+    case "organic":
+      return "Organic";
+    default:
+      return "Product";
+  }
 }
 
 export function generateBlenderScript({
@@ -200,7 +274,6 @@ export function generatePromptInterpretation({
   const colors = detectColorway(cleanPrompt);
   const modifiers = detectModifiers(cleanPrompt);
   const palette = buildPalette(shape, material, colors);
-  const summary = summarizePrompt(cleanPrompt);
 
   const interpretation = {
     prompt: cleanPrompt,
@@ -213,6 +286,19 @@ export function generatePromptInterpretation({
     textureDetail,
     stylePreset,
   };
+  const promptPackage = buildPromptPackage(cleanPrompt, interpretation);
+  const blenderScript = generateBlenderScript({
+    prompt: cleanPrompt,
+    shape,
+    material,
+    topology,
+    textureDetail,
+    modifiers,
+    lighting,
+  });
+  const summary = summarizePrompt(
+    `${titleFromStyle(stylePreset)} model: ${extractSubject(cleanPrompt)}`,
+  );
 
   return {
     type: "generation",
@@ -224,65 +310,18 @@ export function generatePromptInterpretation({
       textureDetail,
     },
     interpretation,
+    promptPackage,
     preview: {
       shape,
       material,
       palette,
     },
-    blenderScript: generateBlenderScript({
-      prompt: cleanPrompt,
-      shape,
-      material,
-      topology,
-      textureDetail,
-      modifiers,
-      lighting,
-    }),
-  };
-}
-
-export function generateCalibrationResult({
-  fileName = "square-reference",
-  width,
-  height,
-}) {
-  return {
-    type: "calibration",
-    summary: `Perfect cube calibration - ${fileName}`,
-    input: {
-      fileName,
-      width,
-      height,
-    },
-    interpretation: {
-      shape: "cube",
-      material: "glass",
-      lighting: "Studio soft light",
-      colorway: ["white", "blue"],
-      modifiers: ["perfect proportions", "reference alignment"],
-      topology: "game-ready",
-      textureDetail: "2k",
-      stylePreset: "calibration",
-      width,
-      height,
-    },
-    preview: {
-      shape: "cube",
-      material: "glass",
-      palette: {
-        accentA: "#88b7ea",
-        accentB: "#224761",
-        accentC: "#eef8ff",
-      },
-    },
-    blenderScript: generateBlenderScript({
-      prompt: `Perfect 3D cube calibration generated from ${fileName}.`,
-      shape: "cube",
-      material: "glass",
-      topology: "game-ready",
-      textureDetail: "2k",
-      modifiers: ["perfect proportions", "reference alignment"],
-      lighting: "Studio soft light",
-    }),
+    blenderScript,
+    delivery: buildDeliveryPackage(
+      summary,
+      cleanPrompt,
+      interpretation,
+      blenderScript,
+    ),
   };
 }

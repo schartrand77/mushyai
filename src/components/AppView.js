@@ -5,7 +5,7 @@ import { renderPipeline } from "./Pipeline.js";
 import { renderPreview } from "./Preview.js";
 
 export function renderAppView(elements, state, activeJob, dispatch) {
-  const renderTarget = activeJob ?? state.draftJob ?? null;
+  const renderTarget = activeJob ?? state.draftJob ?? state.previewJob ?? null;
   renderPreview(elements, buildPreviewModel(renderTarget));
   renderDebug(elements, buildDebugModel(renderTarget));
   renderJobs(elements, state, dispatch);

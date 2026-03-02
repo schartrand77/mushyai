@@ -45,11 +45,3 @@ export function bindPromptDraftInputs(elements, onInput) {
     });
   };
 }
-
-export function bindCalibration(elements, onCalibration) {
-  elements.runCalibration.addEventListener("click", onCalibration);
-
-  return () => {
-    elements.runCalibration.removeEventListener("click", onCalibration);
-  };
-}

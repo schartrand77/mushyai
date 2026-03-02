@@ -1,8 +1,5 @@
 import http from "node:http";
-import {
-  generateCalibrationResult,
-  generatePromptInterpretation,
-} from "./generator.js";
+import { generatePromptInterpretation } from "./generator.js";
 
 const port = Number(process.env.PORT ?? 3000);
 
@@ -51,22 +48,6 @@ function validateGeneratePayload(payload) {
   return "";
 }
 
-function validateCalibrationPayload(payload) {
-  if (!payload || typeof payload !== "object") {
-    return "Request body is required.";
-  }
-
-  if (typeof payload.fileName !== "string" || !payload.fileName.trim()) {
-    return "fileName is required.";
-  }
-
-  if (payload.width !== payload.height || payload.width <= 0) {
-    return "Calibration requires a square image.";
-  }
-
-  return "";
-}
-
 const server = http.createServer(async (request, response) => {
   if (!request.url) {
     sendJson(response, 404, { error: "Not found." });
@@ -89,23 +70,6 @@ const server = http.createServer(async (request, response) => {
       }
 
       sendJson(response, 200, generatePromptInterpretation(payload));
-    } catch (error) {
-      sendJson(response, 400, { error: error.message });
-    }
-    return;
-  }
-
-  if (request.method === "POST" && request.url === "/api/calibrate") {
-    try {
-      const payload = await readBody(request);
-      const error = validateCalibrationPayload(payload);
-
-      if (error) {
-        sendJson(response, 400, { error });
-        return;
-      }
-
-      sendJson(response, 200, generateCalibrationResult(payload));
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }

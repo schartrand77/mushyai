@@ -1,13 +1,4 @@
 import { expect, test } from "@playwright/test";
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-
-const fixtureDirectory = path.join(
-  path.dirname(fileURLToPath(import.meta.url)),
-  "..",
-  "fixtures",
-);
-
 test.describe("mushyai docker app", () => {
   test("loads the control room shell", async ({ page }) => {
     await page.goto("/");
@@ -51,6 +42,7 @@ test.describe("mushyai docker app", () => {
     await expect(page.locator("#debug-script")).toContainText(
       "primitive_cylinder_add",
     );
+    await expect(page.locator("#download-model")).toBeEnabled();
 
     await expect
       .poll(async () => page.locator("#active-progress").textContent())
@@ -69,28 +61,27 @@ test.describe("mushyai docker app", () => {
     );
   });
 
-  test("uses a square image to create a perfect cube calibration job", async ({
+  test("pins a delivered preview until it is cleared", async ({
     page,
   }) => {
     await page.goto("/");
 
     await page
-      .locator("#calibrationImage")
-      .setInputFiles(path.join(fixtureDirectory, "square.svg"));
-    await page.getByRole("button", { name: "Calibrate cube" }).click();
+      .locator("#prompt")
+      .fill("A brushed brass lantern with cutout stars and warm rim light");
+    await page.getByRole("button", { name: "Queue generation" }).click();
 
-    await expect(page.locator("#calibration-feedback")).toContainText(
-      "square.svg",
-    );
-    await expect(page.locator("#job-list")).toContainText(
-      "Perfect cube calibration - square.svg",
-    );
-    await expect(page.locator("#active-prompt")).toContainText(
-      "Perfect cube calibration",
-    );
-    await expect(page.locator("#preview-subject")).toContainText(
-      "Perfect cube calibration",
-    );
-    await expect(page.locator("#debug-json")).toContainText('"shape": "cube"');
+    await expect(page.locator("#preview-subject")).toContainText("Product model");
+    await expect(page.locator("#download-model")).toBeEnabled();
+    await expect
+      .poll(async () => page.locator("#preview-mode").textContent())
+      .toBe("Delivered");
+
+    await page.getByRole("button", { name: "Clear completed" }).click();
+    await expect(page.locator("#job-list")).not.toContainText("Product model");
+    await expect(page.locator("#preview-mode")).toHaveText("Delivered");
+
+    await page.getByRole("button", { name: "Clear preview" }).click();
+    await expect(page.locator("#preview-mode")).toHaveText("Idle");
   });
 });

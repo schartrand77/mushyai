@@ -71,7 +71,6 @@ describe("app state helpers", () => {
         textureDetail: "2k",
       },
       jobs: [],
-      draftJob: null,
       activeJobId: null,
       draftJob: null,
       previewJob: null,
@@ -79,8 +78,11 @@ describe("app state helpers", () => {
     });
   });
 
-  it("rejects prompts that are too short", () => {
-    expect(validatePrompt("tiny")).toContain("12 characters");
+  it("accepts concise prompts but rejects empty noise", () => {
+    expect(validatePrompt("")).toContain("Enter a prompt");
+    expect(validatePrompt("??")).toContain("at least 3 characters");
+    expect(validatePrompt("...word")).toBe("");
+    expect(validatePrompt("apple")).toBe("");
     expect(validatePrompt("A grounded bronze kettle with woven handle")).toBe(
       "",
     );
@@ -160,6 +162,19 @@ describe("app state helpers", () => {
     expect(result.interpretation.shape).toBe("sphere");
     expect(result.interpretation.material).toBe("organic");
     expect(result.summary).toContain("apple");
+  });
+
+  it("keeps hard-surface props out of the cube fallback when shape cues exist", () => {
+    const result = generatePromptInterpretation({
+      prompt: "A brushed aluminum bottle with studio light",
+      stylePreset: "product",
+      topology: "game-ready",
+      textureDetail: "2k",
+    });
+
+    expect(result.interpretation.shape).toBe("cylinder");
+    expect(result.interpretation.material).toBe("metal");
+    expect(result.interpretation.confidence.shape).toBeGreaterThan(0);
   });
 
   it("formats debug JSON for display", () => {

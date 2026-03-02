@@ -1,170 +1,125 @@
+const MODEL_VERSION = "mushyai-ml-2026.03";
+
 function normalizePrompt(prompt) {
   return String(prompt ?? "")
     .trim()
     .replace(/\s+/g, " ");
 }
 
+function unique(values) {
+  return [...new Set(values)];
+}
+
+function scoreLabel(value, labelMap, fallback) {
+  const normalized = value.toLowerCase();
+  const entries = Object.entries(labelMap).map(([label, features]) => {
+    const score = features.reduce((total, feature) => {
+      return total + (feature.pattern.test(normalized) ? feature.weight : 0);
+    }, 0);
+
+    return [label, score];
+  });
+
+  entries.sort((left, right) => {
+    if (right[1] === left[1]) {
+      return left[0].localeCompare(right[0]);
+    }
+
+    return right[1] - left[1];
+  });
+
+  const [bestLabel, bestScore] = entries[0];
+  const totalScore = entries.reduce((total, [, score]) => total + score, 0);
+
+  return {
+    label: bestScore > 0 ? bestLabel : fallback,
+    confidence:
+      bestScore > 0 && totalScore > 0
+        ? Number((bestScore / totalScore).toFixed(2))
+        : 0,
+  };
+}
+
 function extractSubject(prompt) {
   const cleaned = normalizePrompt(prompt)
-    .replace(/^[Aa]n?\s+/, "")
-    .replace(/^the\s+/i, "");
+    .replace(/^(please\s+)?(make|create|generate|render|build)\s+/i, "")
+    .replace(/^((a|an|the)\s+)?(shape|model|render|version)\s+of\s+/i, "")
+    .replace(/^(a|an|the)\s+/i, "");
 
-  return (
-    cleaned
-      .replace(/^(shape|model|render|version)\s+of\s+/i, "")
-      .replace(/^(a|an|the)\s+/i, "") || "generated-asset"
-  );
+  return cleaned || "generated asset";
 }
 
-import { pipeline } from "@huggingface/transformers";
-
-const MODEL_VERSION = "mushyai-ml-2026.03";
-
-let extractor = null;
-
-async function loadExtractor() {
-  if (!extractor) {
-    try {
-      extractor = await pipeline(
-        "feature-extraction",
-        "Xenova/all-MiniLM-L6-v2",
-      );
-    } catch (error) {
-      console.error("Error loading extractor:", error);
-      // It's fine to fail silently, the old classifier will be used.
-    }
-  }
-}
-
-// Load the extractor on startup.
-loadExtractor();
-
-function cosineSimilarity(v1, v2) {
-  let dotProduct = 0;
-  let norm1 = 0;
-  let norm2 = 0;
-
-  for (let i = 0; i < v1.length; i++) {
-    dotProduct += v1[i] * v2[i];
-    norm1 += v1[i] * v1[i];
-    norm2 += v2[i] * v2[i];
-  }
-
-  if (norm1 === 0 || norm2 === 0) {
-    return 0;
-  }
-
-  return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
-}
-
-async function detectShape(prompt) {
-  const value = prompt.toLowerCase();
-  const shapeFeatures = {
+function detectShape(prompt) {
+  return scoreLabel(prompt, {
     cube: [
-      { pattern: /(cube|box|square|dice)/, weight: 2.8 },
-      { pattern: /(blocky|voxel|orthogonal)/, weight: 1.2 },
+      { pattern: /\b(cube|box|dice|block|voxel)\b/, weight: 3 },
+      { pattern: /\b(square|orthogonal|rectilinear|hard edge)\b/, weight: 1.3 },
     ],
     sphere: [
-      { pattern: /(sphere|orb|ball|planet)/, weight: 2.7 },
-      { pattern: /(round|globular|pearl)/, weight: 1.3 },
+      { pattern: /\b(sphere|orb|ball|planet|globe|pearl)\b/, weight: 3 },
+      { pattern: /\b(round|rounded|globular)\b/, weight: 1.4 },
       {
         pattern:
-          /(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|pumpkin)/,
-        weight: 2.5,
+          /\b(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|pumpkin|melon)\b/,
+        weight: 2.8,
       },
     ],
     cylinder: [
-      {
-        pattern: /(cylinder|can|pillar|column|tin|bottle|lantern|tower)/,
-        weight: 2.6,
-      },
-      { pattern: /(kettle|teapot|vase|thermos)/, weight: 1.4 },
+      { pattern: /\b(cylinder|can|pillar|column|tin|bottle|tower|tube)\b/, weight: 2.8 },
+      { pattern: /\b(lantern|kettle|teapot|vase|thermos|jar)\b/, weight: 2 },
     ],
     capsule: [
-      { pattern: /(capsule|pill|vial)/, weight: 2.4 },
-      { pattern: /(rounded ends|pharmaceutical)/, weight: 1.3 },
+      { pattern: /\b(capsule|pill|vial|ampoule)\b/, weight: 3 },
+      { pattern: /\b(rounded ends|pharmaceutical)\b/, weight: 1.2 },
     ],
     pyramid: [
-      { pattern: /(pyramid|cone|spire)/, weight: 2.5 },
-      { pattern: /(triangular profile|pointed top)/, weight: 1.2 },
+      { pattern: /\b(pyramid|cone|spire)\b/, weight: 2.8 },
+      { pattern: /\b(pointed top|triangular profile|tapered)\b/, weight: 1.4 },
     ],
     bust: [
-      { pattern: /(bust|head|statue|face)/, weight: 2.6 },
-      { pattern: /(portrait|sculpture)/, weight: 1.2 },
+      { pattern: /\b(bust|head|face|statue|portrait|sculpture)\b/, weight: 3 },
+      { pattern: /\b(character|figure)\b/, weight: 1.2 },
     ],
-  };
-
-  if (!extractor) {
-    return scoreLabel(value, shapeFeatures, "cube").label;
-  }
-
-  const shapeKeywords = {
-    cube: "cube, box, square, dice, blocky, voxel, orthogonal",
-    sphere:
-      "sphere, orb, ball, planet, round, globular, pearl, apple, orange, lemon, lime, peach, pear, plum, cherry, fruit, tomato, pumpkin",
-    cylinder:
-      "cylinder, can, pillar, column, tin, bottle, lantern, tower, kettle, teapot, vase, thermos",
-    capsule: "capsule, pill, vial, rounded ends, pharmaceutical",
-    pyramid: "pyramid, cone, spire, triangular profile, pointed top",
-    bust: "bust, head, statue, face, portrait, sculpture",
-  };
-
-  const promptEmbedding = await extractor(prompt, {
-    pooling: "mean",
-    normalize: true,
-  });
-
-  let bestShape = "cube";
-  let bestSimilarity = -1;
-
-  for (const shape in shapeKeywords) {
-    const keywords = shapeKeywords[shape];
-    const shapeEmbedding = await extractor(keywords, {
-      pooling: "mean",
-      normalize: true,
-    });
-
-    const similarity = cosineSimilarity(
-      promptEmbedding.data,
-      shapeEmbedding.data,
-    );
-
-    if (similarity > bestSimilarity) {
-      bestSimilarity = similarity;
-      bestShape = shape;
-    }
-  }
-
-  return bestShape;
+  }, "cube");
 }
 
 function detectMaterial(prompt) {
-  const value = prompt.toLowerCase();
-
-  if (/(glass|crystal|transparent|frosted)/.test(value)) return "glass";
-  if (/(bronze|brass|steel|metal|chrome|iron|gold|silver)/.test(value))
-    return "metal";
-  if (/(wood|oak|walnut|timber)/.test(value)) return "wood";
-  if (/(marble|stone|granite|rock|ceramic|clay)/.test(value)) return "stone";
-  if (/(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato)/.test(value))
-    return "organic";
-  return "default";
+  return scoreLabel(prompt, {
+    glass: [
+      { pattern: /\b(glass|crystal|transparent|translucent|frosted)\b/, weight: 3 },
+    ],
+    metal: [
+      { pattern: /\b(bronze|brass|steel|metal|chrome|iron|gold|silver|aluminum)\b/, weight: 3 },
+      { pattern: /\b(polished|brushed|machined)\b/, weight: 1.2 },
+    ],
+    wood: [{ pattern: /\b(wood|oak|walnut|timber|maple|mahogany)\b/, weight: 3 }],
+    stone: [
+      { pattern: /\b(marble|stone|granite|rock|ceramic|clay|porcelain)\b/, weight: 3 },
+    ],
+    organic: [
+      { pattern: /\b(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|leaf|petal)\b/, weight: 2.8 },
+      { pattern: /\b(organic|natural skin|flesh|produce)\b/, weight: 1.6 },
+    ],
+  }, "default");
 }
 
 function detectLighting(prompt) {
-  const value = prompt.toLowerCase();
-
-  if (/(rim light|backlit|back light)/.test(value)) return "Rim lit";
-  if (/(studio|softbox|soft fill)/.test(value)) return "Studio soft light";
-  if (/(dramatic|moody|shadow)/.test(value)) return "Dramatic contrast";
-  if (/(sunset|golden hour|warm light)/.test(value))
-    return "Warm directional light";
-  return "Balanced key light";
+  return scoreLabel(prompt, {
+    "Rim lit": [{ pattern: /\b(rim light|backlit|back light|edge light)\b/, weight: 3 }],
+    "Studio soft light": [
+      { pattern: /\b(studio|softbox|soft fill|soft light|product shot)\b/, weight: 3 },
+    ],
+    "Dramatic contrast": [
+      { pattern: /\b(dramatic|moody|high contrast|deep shadow)\b/, weight: 3 },
+    ],
+    "Warm directional light": [
+      { pattern: /\b(sunset|golden hour|warm light|late afternoon)\b/, weight: 3 },
+    ],
+  }, "Balanced key light").label;
 }
 
 function detectColorway(prompt) {
   const value = prompt.toLowerCase();
-  const matches = [];
   const colors = [
     "amber",
     "black",
@@ -175,91 +130,45 @@ function detectColorway(prompt) {
     "gold",
     "green",
     "ivory",
+    "orange",
     "red",
     "silver",
     "white",
+    "yellow",
   ];
 
-  colors.forEach((color) => {
-    if (value.includes(color)) {
-      matches.push(color);
-    }
-  });
-
-  return matches.length > 0 ? matches : ["neutral"];
+  const matched = colors.filter((color) => value.includes(color));
+  return matched.length ? unique(matched) : ["neutral"];
 }
 
 function detectModifiers(prompt) {
   const value = prompt.toLowerCase();
   const modifiers = [];
 
-  if (/(embossed|engraved|etched)/.test(value))
+  if (/\b(embossed|engraved|etched|carved)\b/.test(value)) {
     modifiers.push("surface detail");
-  if (/(brushed|polished|gloss|glaze|lacquered)/.test(value))
+  }
+  if (/\b(brushed|polished|gloss|glaze|lacquered|matte)\b/.test(value)) {
     modifiers.push("finish treatment");
-  if (/(worn|chipped|weathered)/.test(value)) modifiers.push("edge wear");
-  if (/(cutout|perforated|holes)/.test(value)) modifiers.push("negative space");
-  if (/(woven|rope|handle|strap)/.test(value))
+  }
+  if (/\b(worn|chipped|weathered|aged|distressed)\b/.test(value)) {
+    modifiers.push("edge wear");
+  }
+  if (/\b(cutout|perforated|holes|vented|pierced)\b/.test(value)) {
+    modifiers.push("negative space");
+  }
+  if (/\b(woven|rope|handle|strap|loop|stem)\b/.test(value)) {
     modifiers.push("secondary attachment");
+  }
+  if (/\b(stylized|cartoon|hero)\b/.test(value)) {
+    modifiers.push("stylized proportions");
+  }
 
-  return modifiers;
+  return unique(modifiers);
 }
 
 function summarizePrompt(prompt) {
   return prompt.length > 72 ? `${prompt.slice(0, 69)}...` : prompt;
-}
-
-function buildPromptPackage(prompt, interpretation) {
-  const tones = [];
-
-  if (interpretation.material !== "default") {
-    tones.push(`${interpretation.material} material response`);
-  }
-
-  if (interpretation.colorway.length > 0) {
-    tones.push(`${interpretation.colorway.join(", ")} color direction`);
-  }
-
-  tones.push(`${interpretation.lighting} lighting`);
-  tones.push(`${interpretation.topology} topology`);
-  tones.push(`${interpretation.textureDetail} texture budget`);
-
-  return [
-    `Primary subject: ${extractSubject(prompt)}`,
-    `Render intent: ${interpretation.stylePreset}`,
-    `Spatial form: ${interpretation.shape}`,
-    `Art direction: ${tones.join(" | ")}`,
-    interpretation.modifiers.length
-      ? `Surface notes: ${interpretation.modifiers.join(", ")}`
-      : "Surface notes: keep forms clean and readable",
-    "Delivery goal: export a production-ready preview model with consistent silhouette and material separation.",
-  ].join("\n");
-}
-
-function buildDeliveryPackage(summary, prompt, interpretation, blenderScript) {
-  const safeBaseName = summarizePrompt(summary)
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-  const fileName = `${safeBaseName || "mushyai-model"}.json`;
-
-  return {
-    fileName,
-    mimeType: "application/json",
-    content: JSON.stringify(
-      {
-        exportedAt: new Date().toISOString(),
-        summary,
-        prompt,
-        promptPackage: buildPromptPackage(prompt, interpretation),
-        interpretation,
-        blenderScript,
-      },
-      null,
-      2,
-    ),
-  };
 }
 
 function buildPalette(shape, material, colors) {
@@ -271,8 +180,6 @@ function buildPalette(shape, material, colors) {
     pyramid: { accentA: "#be7040", accentB: "#574135", accentC: "#fff0e4" },
     bust: { accentA: "#a9aba6", accentB: "#3f4f59", accentC: "#f4f0ea" },
   };
-
-  const palette = basePalettes[shape] ?? basePalettes.cube;
 
   if (material === "glass") {
     return { accentA: "#7db7e8", accentB: "#234763", accentC: "#eef9ff" };
@@ -288,15 +195,23 @@ function buildPalette(shape, material, colors) {
     return { accentA: "#c7b8a9", accentB: "#55626d", accentC: "#f6f1ea" };
   }
 
-  if (material === "organic") {
-    return colors.includes("green")
-      ? { accentA: "#84b85b", accentB: "#415b35", accentC: "#f0f8df" }
-      : colors.includes("red")
-        ? { accentA: "#cc5342", accentB: "#6a2d27", accentC: "#ffe5dd" }
-        : { accentA: "#d86c4b", accentB: "#6b4030", accentC: "#fff0df" };
+  if (material === "wood") {
+    return { accentA: "#9a6a3e", accentB: "#4f3929", accentC: "#f8e9d6" };
   }
 
-  return palette;
+  if (material === "organic") {
+    if (colors.includes("green")) {
+      return { accentA: "#84b85b", accentB: "#415b35", accentC: "#f0f8df" };
+    }
+
+    if (colors.includes("yellow") || colors.includes("orange")) {
+      return { accentA: "#de9648", accentB: "#70421d", accentC: "#fff0d7" };
+    }
+
+    return { accentA: "#cc5342", accentB: "#6a2d27", accentC: "#ffe5dd" };
+  }
+
+  return basePalettes[shape] ?? basePalettes.cube;
 }
 
 function blenderPrimitive(shape) {
@@ -335,6 +250,64 @@ function titleFromStyle(stylePreset) {
     default:
       return "Product";
   }
+}
+
+function buildPromptPackage(prompt, interpretation) {
+  const directives = [];
+
+  directives.push(`Primary subject: ${extractSubject(prompt)}`);
+  directives.push(`Render intent: ${interpretation.stylePreset}`);
+  directives.push(
+    `Spatial form: ${interpretation.shape} (confidence ${interpretation.confidence.shape})`,
+  );
+
+  const artDirection = [];
+  if (interpretation.material !== "default") {
+    artDirection.push(`${interpretation.material} material response`);
+  }
+  if (!interpretation.colorway.includes("neutral")) {
+    artDirection.push(`${interpretation.colorway.join(", ")} color direction`);
+  }
+  artDirection.push(`${interpretation.lighting} lighting`);
+  artDirection.push(`${interpretation.topology} topology`);
+  artDirection.push(`${interpretation.textureDetail} texture budget`);
+  directives.push(`Art direction: ${artDirection.join(" | ")}`);
+
+  directives.push(
+    interpretation.modifiers.length
+      ? `Surface notes: ${interpretation.modifiers.join(", ")}`
+      : "Surface notes: keep forms clean and readable",
+  );
+  directives.push(
+    "Delivery goal: export a production-ready preview model with consistent silhouette and material separation.",
+  );
+
+  return directives.join("\n");
+}
+
+function buildDeliveryPackage(summary, prompt, interpretation, blenderScript) {
+  const safeBaseName = summarizePrompt(summary)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 48);
+
+  return {
+    fileName: `${safeBaseName || "mushyai-model"}.json`,
+    mimeType: "application/json",
+    content: JSON.stringify(
+      {
+        exportedAt: new Date().toISOString(),
+        summary,
+        prompt,
+        promptPackage: buildPromptPackage(prompt, interpretation),
+        interpretation,
+        blenderScript,
+      },
+      null,
+      2,
+    ),
+  };
 }
 
 export function generateBlenderScript({
@@ -385,44 +358,48 @@ bpy.context.scene.render.engine = "CYCLES"
 `;
 }
 
-export async function generatePromptInterpretation({
+export function generatePromptInterpretation({
   prompt,
   stylePreset = "product",
   topology = "game-ready",
   textureDetail = "2k",
 }) {
   const cleanPrompt = normalizePrompt(prompt);
-  const shape = await detectShape(cleanPrompt);
-  const material = detectMaterial(cleanPrompt);
+  const shapeScore = detectShape(cleanPrompt);
+  const materialScore = detectMaterial(cleanPrompt);
   const lighting = detectLighting(cleanPrompt);
   const colors = detectColorway(cleanPrompt);
   const modifiers = detectModifiers(cleanPrompt);
-  const palette = buildPalette(shape, material, colors);
+  const palette = buildPalette(shapeScore.label, materialScore.label, colors);
+  const summary = summarizePrompt(
+    `${titleFromStyle(stylePreset)} model: ${extractSubject(cleanPrompt)}`,
+  );
 
   const interpretation = {
     prompt: cleanPrompt,
-    shape,
-    material,
+    shape: shapeScore.label,
+    material: materialScore.label,
     lighting,
     colorway: colors,
     modifiers,
     topology,
     textureDetail,
     stylePreset,
+    confidence: {
+      shape: shapeScore.confidence,
+      material: materialScore.confidence,
+    },
   };
-  const promptPackage = buildPromptPackage(cleanPrompt, interpretation);
+
   const blenderScript = generateBlenderScript({
     prompt: cleanPrompt,
-    shape,
-    material,
+    shape: interpretation.shape,
+    material: interpretation.material,
     topology,
     textureDetail,
     modifiers,
     lighting,
   });
-  const summary = summarizePrompt(
-    `${titleFromStyle(stylePreset)} model: ${extractSubject(cleanPrompt)}`,
-  );
 
   return {
     type: "generation",
@@ -434,16 +411,14 @@ export async function generatePromptInterpretation({
       textureDetail,
     },
     interpretation,
-    promptPackage,
+    promptPackage: buildPromptPackage(cleanPrompt, interpretation),
     model: {
       version: MODEL_VERSION,
-      classifier: extractor
-        ? "sentence-embedding-similarity"
-        : "weighted-keyword-ensemble",
+      classifier: "weighted-keyword-ensemble",
     },
     preview: {
-      shape,
-      material,
+      shape: interpretation.shape,
+      material: interpretation.material,
       palette,
     },
     blenderScript,

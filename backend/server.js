@@ -86,8 +86,18 @@ function validateGeneratePayload(payload) {
     return "Request body is required.";
   }
 
-  if (typeof payload.prompt !== "string" || payload.prompt.trim().length < 12) {
-    return "Prompt must be at least 12 characters.";
+  if (typeof payload.prompt !== "string") {
+    return "Prompt is required.";
+  }
+
+  const prompt = payload.prompt.trim().replace(/\s+/g, " ");
+
+  if (prompt.length < 3) {
+    return "Prompt must be at least 3 characters.";
+  }
+
+  if (!/[a-z0-9]{3}/i.test(prompt)) {
+    return "Prompt must include recognizable words or object names.";
   }
 
   return "";

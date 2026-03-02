@@ -28,14 +28,18 @@ export function createInitialState() {
 }
 
 export function validatePrompt(prompt) {
-  const value = prompt.trim();
+  const value = prompt.trim().replace(/\s+/g, " ");
 
   if (!value) {
     return "Enter a prompt before queueing a job.";
   }
 
-  if (value.length < 12) {
-    return "Use at least 12 characters so the prompt is specific enough.";
+  if (value.length < 3) {
+    return "Use at least 3 characters so the prompt has a clear subject.";
+  }
+
+  if (!/[a-z0-9]{3}/i.test(value)) {
+    return "Use a prompt with recognizable words or object names.";
   }
 
   return "";

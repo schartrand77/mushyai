@@ -93,30 +93,12 @@ function validateGeneratePayload(payload) {
   return "";
 }
 
-<<<<<<< HEAD
-=======
-function validateCalibrationPayload(payload) {
-  if (!payload || typeof payload !== "object") {
-    return "Request body is required.";
-  }
-
-  if (typeof payload.fileName !== "string" || !payload.fileName.trim()) {
-    return "fileName is required.";
-  }
-
-  if (payload.width !== payload.height || payload.width <= 0) {
-    return "Calibration requires a square image.";
-  }
-
-  return "";
-}
-
 function isJsonRequest(request) {
   const contentType = request.headers["content-type"] ?? "";
   return contentType.toLowerCase().startsWith("application/json");
 }
 
-function maybeCachedGeneration(payload) {
+async function maybeCachedGeneration(payload) {
   const key = JSON.stringify({
     prompt: payload.prompt,
     stylePreset: payload.stylePreset,
@@ -131,7 +113,7 @@ function maybeCachedGeneration(payload) {
     return cached;
   }
 
-  const generated = generatePromptInterpretation(payload);
+  const generated = await generatePromptInterpretation(payload);
   generationCache.set(key, generated);
 
   if (generationCache.size > CACHE_MAX_ITEMS) {
@@ -141,8 +123,6 @@ function maybeCachedGeneration(payload) {
 
   return generated;
 }
-
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
 const server = http.createServer(async (request, response) => {
   if (!request.url) {
     sendJson(response, 404, { error: "Not found." });
@@ -158,7 +138,7 @@ const server = http.createServer(async (request, response) => {
 
   if (
     request.method === "POST" &&
-    (pathname === "/api/generate" || pathname === "/api/calibrate")
+    pathname === "/api/generate"
   ) {
     if (hitRateLimit(readClientId(request))) {
       sendJson(response, 429, { error: "Too many requests. Slow down slightly." });
@@ -181,33 +161,14 @@ const server = http.createServer(async (request, response) => {
         return;
       }
 
-      sendJson(response, 200, maybeCachedGeneration(payload));
+      const result = await maybeCachedGeneration(payload);
+      sendJson(response, 200, result);
     } catch (error) {
       sendJson(response, 400, { error: error.message });
     }
     return;
   }
 
-<<<<<<< HEAD
-=======
-  if (request.method === "POST" && pathname === "/api/calibrate") {
-    try {
-      const payload = await readBody(request);
-      const error = validateCalibrationPayload(payload);
-
-      if (error) {
-        sendJson(response, 400, { error });
-        return;
-      }
-
-      sendJson(response, 200, generateCalibrationResult(payload));
-    } catch (error) {
-      sendJson(response, 400, { error: error.message });
-    }
-    return;
-  }
-
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
   sendJson(response, 404, { error: "Not found." });
 });
 

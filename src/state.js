@@ -20,7 +20,6 @@ export function createInitialState() {
   return {
     form: { ...DEFAULT_FORM },
     jobs: [],
-    draftJob: null,
     activeJobId: null,
     draftJob: null,
     previewJob: null,
@@ -141,17 +140,8 @@ function normalizeJob(job) {
   };
 }
 
-<<<<<<< HEAD
 function normalizePreviewJob(job) {
   if (!job || typeof job !== "object" || typeof job.id !== "string") {
-=======
-function normalizeDraftJob(job) {
-  if (!job || typeof job !== "object") {
-    return null;
-  }
-
-  if (typeof job.id !== "string" || typeof job.summary !== "string") {
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
     return null;
   }
 
@@ -181,7 +171,6 @@ export function normalizeState(input) {
       ...(input.form ?? {}),
     },
     jobs: sortJobs(jobs),
-    draftJob: normalizeDraftJob(input.draftJob),
     activeJobId:
       typeof input.activeJobId === "string" &&
       jobs.some(
@@ -210,29 +199,16 @@ export function reducer(state, action) {
           [action.name]: action.value,
         },
       };
-<<<<<<< HEAD
     case "draftChanged":
       return {
         ...state,
         draftJob: action.job ?? null,
-=======
-    case "draftUpdated":
-      return {
-        ...state,
-        draftJob: action.job,
-      };
-    case "draftCleared":
-      return {
-        ...state,
-        draftJob: null,
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
       };
     case "jobQueued": {
       const nextJobs = sortJobs([action.job, ...state.jobs]);
       return {
         ...state,
         jobs: nextJobs,
-        draftJob: null,
         activeJobId: action.job.id,
         draftJob: null,
         lastMessage: action.message ?? "Job queued. Pipeline started.",

@@ -149,6 +149,19 @@ describe("app state helpers", () => {
     expect(result.blenderScript).toContain("primitive_uv_sphere_add");
   });
 
+  it("treats apples as organic spherical subjects", () => {
+    const result = generatePromptInterpretation({
+      prompt: "shape of an apple",
+      stylePreset: "product",
+      topology: "game-ready",
+      textureDetail: "2k",
+    });
+
+    expect(result.interpretation.shape).toBe("sphere");
+    expect(result.interpretation.material).toBe("organic");
+    expect(result.summary).toContain("apple");
+  });
+
   it("formats debug JSON for display", () => {
     expect(prettyJson({ shape: "cube" })).toContain('"shape": "cube"');
   });

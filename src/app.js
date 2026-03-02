@@ -60,24 +60,8 @@ export function createApp({
   const elements = queryElements(document);
   let state = loadState(storage);
   let timer = null;
-<<<<<<< HEAD
   let draftTimer = null;
   let lastDownloadUrl = null;
-=======
-  let persistTimer = null;
-  let draftTimer = null;
-
-  function scheduleStatePersist() {
-    if (persistTimer) {
-      return;
-    }
-
-    persistTimer = setTimeout(() => {
-      persistTimer = null;
-      saveState(state, storage);
-    }, 120);
-  }
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
 
   function getActiveJob() {
     return state.jobs.find((job) => job.id === state.activeJobId) ?? null;
@@ -115,7 +99,7 @@ export function createApp({
 
   function dispatch(action) {
     state = reducer(state, action);
-    scheduleStatePersist();
+    saveState(state, storage);
     render();
     syncTimer();
   }
@@ -222,101 +206,12 @@ export function createApp({
     }
   }
 
-<<<<<<< HEAD
   const unbindJobForm = bindJobForm(elements, handleSubmit);
   const unbindDraftInputs = bindPromptDraftInputs(elements, queueDraftGeneration);
   const unbindHistory = bindHistoryControls(
     elements,
     () => dispatch({ type: "clearCompleted" }),
     () => dispatch({ type: "previewCleared" }),
-=======
-  function clearDraftTimer() {
-    if (draftTimer) {
-      clearTimeout(draftTimer);
-      draftTimer = null;
-    }
-  }
-
-  function queueDraftInterpretation() {
-    clearDraftTimer();
-    draftTimer = setTimeout(async () => {
-      const values = readFormValues(elements);
-      const error = validatePrompt(values.prompt);
-
-      if (error) {
-        dispatch({ type: "draftCleared" });
-        return;
-      }
-
-      try {
-        const generation = await apiClient("/api/generate", values);
-        dispatch({
-          type: "draftUpdated",
-          job: {
-            id: "draft-preview",
-            summary: generation.summary,
-            prompt: values.prompt,
-            stylePreset: values.stylePreset,
-            topology: values.topology,
-            textureDetail: values.textureDetail,
-            stage: "draft",
-            progress: 0,
-            createdAt: new Date(0).toISOString(),
-            updatedAt: new Date(0).toISOString(),
-            isFavorite: false,
-            result: generation,
-          },
-        });
-      } catch {
-        dispatch({ type: "draftCleared" });
-      }
-    }, 220);
-  }
-
-  async function handleCalibration() {
-    const file = elements.calibrationImage.files?.[0];
-
-    elements.runCalibration.disabled = true;
-    elements.calibrationFeedback.textContent = "";
-
-    try {
-      const metadata = await inspectFile(file);
-      const validationError = validateCalibrationImage(metadata);
-
-      if (validationError) {
-        elements.calibrationFeedback.textContent = validationError;
-        return;
-      }
-
-      const generation = await apiClient("/api/calibrate", {
-        fileName: file.name,
-        width: metadata.width,
-        height: metadata.height,
-      });
-      const job = createCalibrationJobFromGeneration(file, generation, clock());
-      dispatch({
-        type: "jobQueued",
-        job,
-        message: "Calibration queued. Perfect cube reference locked.",
-      });
-      elements.calibrationFeedback.textContent = `Calibration queued from ${file.name}.`;
-      elements.calibrationImage.value = "";
-    } catch (error) {
-      elements.calibrationFeedback.textContent = error.message;
-    } finally {
-      elements.runCalibration.disabled = false;
-    }
-  }
-
-  const unbindJobForm = bindJobForm(elements, handleSubmit);
-  const unbindDraftInputs = bindPromptDraftInputs(
-    elements,
-    queueDraftInterpretation,
-  );
-  const unbindCalibration = bindCalibration(elements, handleCalibration);
-  const unbindHistory = bindHistoryControls(elements, () =>
-    dispatch({ type: "clearCompleted" }),
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
   );
   elements.downloadModel.addEventListener("click", downloadPreviewModel);
 
@@ -329,7 +224,6 @@ export function createApp({
       if (timer) {
         clearInterval(timer);
       }
-<<<<<<< HEAD
       if (draftTimer) {
         clearTimeout(draftTimer);
       }
@@ -338,16 +232,6 @@ export function createApp({
       }
       unbindJobForm();
       unbindDraftInputs();
-=======
-      if (persistTimer) {
-        clearTimeout(persistTimer);
-        saveState(state, storage);
-      }
-      clearDraftTimer();
-      unbindJobForm();
-      unbindDraftInputs();
-      unbindCalibration();
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
       unbindHistory();
       elements.downloadModel.removeEventListener("click", downloadPreviewModel);
     },

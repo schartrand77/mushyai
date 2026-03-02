@@ -432,6 +432,17 @@ button:disabled {
     linear-gradient(180deg, rgba(214, 218, 222, 0.6), rgba(90, 99, 108, 0.22));
 }
 
+.preview-stage[data-material="organic"] .preview-face {
+  background:
+    radial-gradient(
+      circle at 30% 24%,
+      rgba(255, 255, 255, 0.58),
+      rgba(255, 255, 255, 0.04) 34%,
+      transparent 36%
+    ),
+    linear-gradient(180deg, rgba(232, 92, 71, 0.88), rgba(112, 28, 24, 0.36));
+}
+
 .preview-face {
   position: absolute;
   inset: 0;

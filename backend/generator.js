@@ -4,48 +4,60 @@ function normalizePrompt(prompt) {
     .replace(/\s+/g, " ");
 }
 
-<<<<<<< HEAD
 function extractSubject(prompt) {
   const cleaned = normalizePrompt(prompt)
     .replace(/^[Aa]n?\s+/, "")
     .replace(/^the\s+/i, "");
 
-  return cleaned || "generated-asset";
-=======
-const MODEL_VERSION = "mushyai-ml-2026.03";
-
-function scoreLabel(value, labelMap, fallback) {
-  const scoreCard = new Map(Object.keys(labelMap).map((label) => [label, 0]));
-
-  Object.entries(labelMap).forEach(([label, features]) => {
-    features.forEach(({ pattern, weight }) => {
-      if (pattern.test(value)) {
-        scoreCard.set(label, scoreCard.get(label) + weight);
-      }
-    });
-  });
-
-  const ranked = [...scoreCard.entries()].sort((left, right) => {
-    if (right[1] === left[1]) {
-      return left[0].localeCompare(right[0]);
-    }
-
-    return right[1] - left[1];
-  });
-
-  const [bestLabel, bestScore] = ranked[0];
-  const scoreTotal = ranked.reduce((total, [, score]) => total + score, 0);
-  const confidence =
-    bestScore <= 0 || scoreTotal <= 0 ? 0 : Number((bestScore / scoreTotal).toFixed(2));
-
-  return {
-    label: bestScore > 0 ? bestLabel : fallback,
-    confidence,
-  };
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
+  return (
+    cleaned
+      .replace(/^(shape|model|render|version)\s+of\s+/i, "")
+      .replace(/^(a|an|the)\s+/i, "") || "generated-asset"
+  );
 }
 
-function detectShape(prompt) {
+import { pipeline } from "@huggingface/transformers";
+
+const MODEL_VERSION = "mushyai-ml-2026.03";
+
+let extractor = null;
+
+async function loadExtractor() {
+  if (!extractor) {
+    try {
+      extractor = await pipeline(
+        "feature-extraction",
+        "Xenova/all-MiniLM-L6-v2",
+      );
+    } catch (error) {
+      console.error("Error loading extractor:", error);
+      // It's fine to fail silently, the old classifier will be used.
+    }
+  }
+}
+
+// Load the extractor on startup.
+loadExtractor();
+
+function cosineSimilarity(v1, v2) {
+  let dotProduct = 0;
+  let norm1 = 0;
+  let norm2 = 0;
+
+  for (let i = 0; i < v1.length; i++) {
+    dotProduct += v1[i] * v2[i];
+    norm1 += v1[i] * v1[i];
+    norm2 += v2[i] * v2[i];
+  }
+
+  if (norm1 === 0 || norm2 === 0) {
+    return 0;
+  }
+
+  return dotProduct / (Math.sqrt(norm1) * Math.sqrt(norm2));
+}
+
+async function detectShape(prompt) {
   const value = prompt.toLowerCase();
   const shapeFeatures = {
     cube: [
@@ -55,9 +67,17 @@ function detectShape(prompt) {
     sphere: [
       { pattern: /(sphere|orb|ball|planet)/, weight: 2.7 },
       { pattern: /(round|globular|pearl)/, weight: 1.3 },
+      {
+        pattern:
+          /(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|pumpkin)/,
+        weight: 2.5,
+      },
     ],
     cylinder: [
-      { pattern: /(cylinder|can|pillar|column|tin|bottle|lantern|tower)/, weight: 2.6 },
+      {
+        pattern: /(cylinder|can|pillar|column|tin|bottle|lantern|tower)/,
+        weight: 2.6,
+      },
       { pattern: /(kettle|teapot|vase|thermos)/, weight: 1.4 },
     ],
     capsule: [
@@ -74,7 +94,48 @@ function detectShape(prompt) {
     ],
   };
 
-  return scoreLabel(value, shapeFeatures, "cube").label;
+  if (!extractor) {
+    return scoreLabel(value, shapeFeatures, "cube").label;
+  }
+
+  const shapeKeywords = {
+    cube: "cube, box, square, dice, blocky, voxel, orthogonal",
+    sphere:
+      "sphere, orb, ball, planet, round, globular, pearl, apple, orange, lemon, lime, peach, pear, plum, cherry, fruit, tomato, pumpkin",
+    cylinder:
+      "cylinder, can, pillar, column, tin, bottle, lantern, tower, kettle, teapot, vase, thermos",
+    capsule: "capsule, pill, vial, rounded ends, pharmaceutical",
+    pyramid: "pyramid, cone, spire, triangular profile, pointed top",
+    bust: "bust, head, statue, face, portrait, sculpture",
+  };
+
+  const promptEmbedding = await extractor(prompt, {
+    pooling: "mean",
+    normalize: true,
+  });
+
+  let bestShape = "cube";
+  let bestSimilarity = -1;
+
+  for (const shape in shapeKeywords) {
+    const keywords = shapeKeywords[shape];
+    const shapeEmbedding = await extractor(keywords, {
+      pooling: "mean",
+      normalize: true,
+    });
+
+    const similarity = cosineSimilarity(
+      promptEmbedding.data,
+      shapeEmbedding.data,
+    );
+
+    if (similarity > bestSimilarity) {
+      bestSimilarity = similarity;
+      bestShape = shape;
+    }
+  }
+
+  return bestShape;
 }
 
 function detectMaterial(prompt) {
@@ -85,6 +146,8 @@ function detectMaterial(prompt) {
     return "metal";
   if (/(wood|oak|walnut|timber)/.test(value)) return "wood";
   if (/(marble|stone|granite|rock|ceramic|clay)/.test(value)) return "stone";
+  if (/(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato)/.test(value))
+    return "organic";
   return "default";
 }
 
@@ -225,6 +288,14 @@ function buildPalette(shape, material, colors) {
     return { accentA: "#c7b8a9", accentB: "#55626d", accentC: "#f6f1ea" };
   }
 
+  if (material === "organic") {
+    return colors.includes("green")
+      ? { accentA: "#84b85b", accentB: "#415b35", accentC: "#f0f8df" }
+      : colors.includes("red")
+        ? { accentA: "#cc5342", accentB: "#6a2d27", accentC: "#ffe5dd" }
+        : { accentA: "#d86c4b", accentB: "#6b4030", accentC: "#fff0df" };
+  }
+
   return palette;
 }
 
@@ -305,6 +376,8 @@ elif ${JSON.stringify(material)} == "stone":
     mat.diffuse_color = (0.74, 0.72, 0.68, 1.0)
 elif ${JSON.stringify(material)} == "wood":
     mat.diffuse_color = (0.58, 0.36, 0.22, 1.0)
+elif ${JSON.stringify(material)} == "organic":
+    mat.diffuse_color = (0.76, 0.18, 0.12, 1.0)
 else:
     mat.diffuse_color = (0.78, 0.76, 0.73, 1.0)
 
@@ -312,14 +385,14 @@ bpy.context.scene.render.engine = "CYCLES"
 `;
 }
 
-export function generatePromptInterpretation({
+export async function generatePromptInterpretation({
   prompt,
   stylePreset = "product",
   topology = "game-ready",
   textureDetail = "2k",
 }) {
   const cleanPrompt = normalizePrompt(prompt);
-  const shape = detectShape(cleanPrompt);
+  const shape = await detectShape(cleanPrompt);
   const material = detectMaterial(cleanPrompt);
   const lighting = detectLighting(cleanPrompt);
   const colors = detectColorway(cleanPrompt);
@@ -361,14 +434,13 @@ export function generatePromptInterpretation({
       textureDetail,
     },
     interpretation,
-<<<<<<< HEAD
     promptPackage,
-=======
     model: {
       version: MODEL_VERSION,
-      classifier: "weighted-keyword-ensemble",
+      classifier: extractor
+        ? "sentence-embedding-similarity"
+        : "weighted-keyword-ensemble",
     },
->>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
     preview: {
       shape,
       material,

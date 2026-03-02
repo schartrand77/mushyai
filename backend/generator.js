@@ -4,26 +4,77 @@ function normalizePrompt(prompt) {
     .replace(/\s+/g, " ");
 }
 
+<<<<<<< HEAD
 function extractSubject(prompt) {
   const cleaned = normalizePrompt(prompt)
     .replace(/^[Aa]n?\s+/, "")
     .replace(/^the\s+/i, "");
 
   return cleaned || "generated-asset";
+=======
+const MODEL_VERSION = "mushyai-ml-2026.03";
+
+function scoreLabel(value, labelMap, fallback) {
+  const scoreCard = new Map(Object.keys(labelMap).map((label) => [label, 0]));
+
+  Object.entries(labelMap).forEach(([label, features]) => {
+    features.forEach(({ pattern, weight }) => {
+      if (pattern.test(value)) {
+        scoreCard.set(label, scoreCard.get(label) + weight);
+      }
+    });
+  });
+
+  const ranked = [...scoreCard.entries()].sort((left, right) => {
+    if (right[1] === left[1]) {
+      return left[0].localeCompare(right[0]);
+    }
+
+    return right[1] - left[1];
+  });
+
+  const [bestLabel, bestScore] = ranked[0];
+  const scoreTotal = ranked.reduce((total, [, score]) => total + score, 0);
+  const confidence =
+    bestScore <= 0 || scoreTotal <= 0 ? 0 : Number((bestScore / scoreTotal).toFixed(2));
+
+  return {
+    label: bestScore > 0 ? bestLabel : fallback,
+    confidence,
+  };
+>>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
 }
 
 function detectShape(prompt) {
   const value = prompt.toLowerCase();
+  const shapeFeatures = {
+    cube: [
+      { pattern: /(cube|box|square|dice)/, weight: 2.8 },
+      { pattern: /(blocky|voxel|orthogonal)/, weight: 1.2 },
+    ],
+    sphere: [
+      { pattern: /(sphere|orb|ball|planet)/, weight: 2.7 },
+      { pattern: /(round|globular|pearl)/, weight: 1.3 },
+    ],
+    cylinder: [
+      { pattern: /(cylinder|can|pillar|column|tin|bottle|lantern|tower)/, weight: 2.6 },
+      { pattern: /(kettle|teapot|vase|thermos)/, weight: 1.4 },
+    ],
+    capsule: [
+      { pattern: /(capsule|pill|vial)/, weight: 2.4 },
+      { pattern: /(rounded ends|pharmaceutical)/, weight: 1.3 },
+    ],
+    pyramid: [
+      { pattern: /(pyramid|cone|spire)/, weight: 2.5 },
+      { pattern: /(triangular profile|pointed top)/, weight: 1.2 },
+    ],
+    bust: [
+      { pattern: /(bust|head|statue|face)/, weight: 2.6 },
+      { pattern: /(portrait|sculpture)/, weight: 1.2 },
+    ],
+  };
 
-  if (/(cube|box|square|dice)/.test(value)) return "cube";
-  if (/(sphere|orb|ball|planet)/.test(value)) return "sphere";
-  if (/(cylinder|can|pillar|column|tin|bottle|lantern|tower)/.test(value))
-    return "cylinder";
-  if (/(capsule|pill|vial)/.test(value)) return "capsule";
-  if (/(pyramid|cone|spire)/.test(value)) return "pyramid";
-  if (/(bust|head|statue|face)/.test(value)) return "bust";
-  if (/(kettle|teapot)/.test(value)) return "cylinder";
-  return "cube";
+  return scoreLabel(value, shapeFeatures, "cube").label;
 }
 
 function detectMaterial(prompt) {
@@ -310,7 +361,14 @@ export function generatePromptInterpretation({
       textureDetail,
     },
     interpretation,
+<<<<<<< HEAD
     promptPackage,
+=======
+    model: {
+      version: MODEL_VERSION,
+      classifier: "weighted-keyword-ensemble",
+    },
+>>>>>>> b9423e0bb14b80e3d820c69a0dcad6b6e7a2ef86
     preview: {
       shape,
       material,

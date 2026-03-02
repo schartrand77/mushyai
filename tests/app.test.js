@@ -71,6 +71,7 @@ describe("app state helpers", () => {
         textureDetail: "2k",
       },
       jobs: [],
+      draftJob: null,
       activeJobId: null,
       draftJob: null,
       previewJob: null,

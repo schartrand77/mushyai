@@ -50,72 +50,123 @@ function extractSubject(prompt) {
 }
 
 function detectShape(prompt) {
-  return scoreLabel(prompt, {
-    cube: [
-      { pattern: /\b(cube|box|dice|block|voxel)\b/, weight: 3 },
-      { pattern: /\b(square|orthogonal|rectilinear|hard edge)\b/, weight: 1.3 },
-    ],
-    sphere: [
-      { pattern: /\b(sphere|orb|ball|planet|globe|pearl)\b/, weight: 3 },
-      { pattern: /\b(round|rounded|globular)\b/, weight: 1.4 },
-      {
-        pattern:
-          /\b(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|pumpkin|melon)\b/,
-        weight: 2.8,
-      },
-    ],
-    cylinder: [
-      { pattern: /\b(cylinder|can|pillar|column|tin|bottle|tower|tube)\b/, weight: 2.8 },
-      { pattern: /\b(lantern|kettle|teapot|vase|thermos|jar)\b/, weight: 2 },
-    ],
-    capsule: [
-      { pattern: /\b(capsule|pill|vial|ampoule)\b/, weight: 3 },
-      { pattern: /\b(rounded ends|pharmaceutical)\b/, weight: 1.2 },
-    ],
-    pyramid: [
-      { pattern: /\b(pyramid|cone|spire)\b/, weight: 2.8 },
-      { pattern: /\b(pointed top|triangular profile|tapered)\b/, weight: 1.4 },
-    ],
-    bust: [
-      { pattern: /\b(bust|head|face|statue|portrait|sculpture)\b/, weight: 3 },
-      { pattern: /\b(character|figure)\b/, weight: 1.2 },
-    ],
-  }, "cube");
+  return scoreLabel(
+    prompt,
+    {
+      cube: [
+        { pattern: /\b(cube|box|dice|block|voxel)\b/, weight: 3 },
+        {
+          pattern: /\b(square|orthogonal|rectilinear|hard edge)\b/,
+          weight: 1.3,
+        },
+      ],
+      sphere: [
+        { pattern: /\b(sphere|orb|ball|planet|globe|pearl)\b/, weight: 3 },
+        { pattern: /\b(round|rounded|globular)\b/, weight: 1.4 },
+        {
+          pattern:
+            /\b(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|pumpkin|melon)\b/,
+          weight: 2.8,
+        },
+      ],
+      cylinder: [
+        {
+          pattern: /\b(cylinder|can|pillar|column|tin|bottle|tower|tube)\b/,
+          weight: 2.8,
+        },
+        { pattern: /\b(lantern|kettle|teapot|vase|thermos|jar)\b/, weight: 2 },
+      ],
+      capsule: [
+        { pattern: /\b(capsule|pill|vial|ampoule)\b/, weight: 3 },
+        { pattern: /\b(rounded ends|pharmaceutical)\b/, weight: 1.2 },
+      ],
+      pyramid: [
+        { pattern: /\b(pyramid|cone|spire)\b/, weight: 2.8 },
+        {
+          pattern: /\b(pointed top|triangular profile|tapered)\b/,
+          weight: 1.4,
+        },
+      ],
+      bust: [
+        {
+          pattern: /\b(bust|head|face|statue|portrait|sculpture)\b/,
+          weight: 3,
+        },
+        { pattern: /\b(character|figure)\b/, weight: 1.2 },
+      ],
+    },
+    "cube",
+  );
 }
 
 function detectMaterial(prompt) {
-  return scoreLabel(prompt, {
-    glass: [
-      { pattern: /\b(glass|crystal|transparent|translucent|frosted)\b/, weight: 3 },
-    ],
-    metal: [
-      { pattern: /\b(bronze|brass|steel|metal|chrome|iron|gold|silver|aluminum)\b/, weight: 3 },
-      { pattern: /\b(polished|brushed|machined)\b/, weight: 1.2 },
-    ],
-    wood: [{ pattern: /\b(wood|oak|walnut|timber|maple|mahogany)\b/, weight: 3 }],
-    stone: [
-      { pattern: /\b(marble|stone|granite|rock|ceramic|clay|porcelain)\b/, weight: 3 },
-    ],
-    organic: [
-      { pattern: /\b(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|leaf|petal)\b/, weight: 2.8 },
-      { pattern: /\b(organic|natural skin|flesh|produce)\b/, weight: 1.6 },
-    ],
-  }, "default");
+  return scoreLabel(
+    prompt,
+    {
+      glass: [
+        {
+          pattern: /\b(glass|crystal|transparent|translucent|frosted)\b/,
+          weight: 3,
+        },
+      ],
+      metal: [
+        {
+          pattern:
+            /\b(bronze|brass|steel|metal|chrome|iron|gold|silver|aluminum)\b/,
+          weight: 3,
+        },
+        { pattern: /\b(polished|brushed|machined)\b/, weight: 1.2 },
+      ],
+      wood: [
+        { pattern: /\b(wood|oak|walnut|timber|maple|mahogany)\b/, weight: 3 },
+      ],
+      stone: [
+        {
+          pattern: /\b(marble|stone|granite|rock|ceramic|clay|porcelain)\b/,
+          weight: 3,
+        },
+      ],
+      organic: [
+        {
+          pattern:
+            /\b(apple|orange|lemon|lime|peach|pear|plum|cherry|fruit|tomato|leaf|petal)\b/,
+          weight: 2.8,
+        },
+        { pattern: /\b(organic|natural skin|flesh|produce)\b/, weight: 1.6 },
+      ],
+    },
+    "default",
+  );
 }
 
 function detectLighting(prompt) {
-  return scoreLabel(prompt, {
-    "Rim lit": [{ pattern: /\b(rim light|backlit|back light|edge light)\b/, weight: 3 }],
-    "Studio soft light": [
-      { pattern: /\b(studio|softbox|soft fill|soft light|product shot)\b/, weight: 3 },
-    ],
-    "Dramatic contrast": [
-      { pattern: /\b(dramatic|moody|high contrast|deep shadow)\b/, weight: 3 },
-    ],
-    "Warm directional light": [
-      { pattern: /\b(sunset|golden hour|warm light|late afternoon)\b/, weight: 3 },
-    ],
-  }, "Balanced key light").label;
+  return scoreLabel(
+    prompt,
+    {
+      "Rim lit": [
+        { pattern: /\b(rim light|backlit|back light|edge light)\b/, weight: 3 },
+      ],
+      "Studio soft light": [
+        {
+          pattern: /\b(studio|softbox|soft fill|soft light|product shot)\b/,
+          weight: 3,
+        },
+      ],
+      "Dramatic contrast": [
+        {
+          pattern: /\b(dramatic|moody|high contrast|deep shadow)\b/,
+          weight: 3,
+        },
+      ],
+      "Warm directional light": [
+        {
+          pattern: /\b(sunset|golden hour|warm light|late afternoon)\b/,
+          weight: 3,
+        },
+      ],
+    },
+    "Balanced key light",
+  ).label;
 }
 
 function detectColorway(prompt) {

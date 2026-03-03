@@ -220,9 +220,7 @@ export function reducer(state, action) {
     }
     case "jobFavorited": {
       const nextJobs = state.jobs.map((job) =>
-        job.id === action.jobId
-          ? { ...job, isFavorite: !job.isFavorite }
-          : job,
+        job.id === action.jobId ? { ...job, isFavorite: !job.isFavorite } : job,
       );
       return {
         ...state,
@@ -242,7 +240,9 @@ export function reducer(state, action) {
         jobs: nextJobs,
         activeJobId: stillActive,
         previewJob:
-          action.job.stage === "complete" ? normalizeJob(action.job) : state.previewJob,
+          action.job.stage === "complete"
+            ? normalizeJob(action.job)
+            : state.previewJob,
         lastMessage:
           action.job.stage === "complete"
             ? "Job complete. Asset is ready for export."

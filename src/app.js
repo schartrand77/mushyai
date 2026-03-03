@@ -61,6 +61,7 @@ export function createApp({
   let state = loadState(storage);
   let timer = null;
   let draftTimer = null;
+  let latestDraftRequestId = 0;
   let lastDownloadUrl = null;
 
   function getActiveJob() {
@@ -108,24 +109,44 @@ export function createApp({
     const values = readFormValues(elements);
     const error = validatePrompt(values.prompt);
 
+    dispatch({ type: "fieldChanged", name: "prompt", value: values.prompt });
     dispatch({
       type: "fieldChanged",
-      name: "prompt",
-      value: values.prompt,
+      name: "stylePreset",
+      value: values.stylePreset,
     });
-
-    if (error) {
-      dispatch({ type: "draftChanged", job: null });
-      return;
-    }
+    dispatch({
+      type: "fieldChanged",
+      name: "topology",
+      value: values.topology,
+    });
+    dispatch({
+      type: "fieldChanged",
+      name: "textureDetail",
+      value: values.textureDetail,
+    });
 
     if (draftTimer) {
       clearTimeout(draftTimer);
     }
 
+    if (error) {
+      latestDraftRequestId += 1;
+      dispatch({ type: "draftChanged", job: null });
+      return;
+    }
+
+    const requestId = latestDraftRequestId + 1;
+    latestDraftRequestId = requestId;
+
     draftTimer = setTimeout(async () => {
       try {
         const generation = await apiClient("/api/generate", values);
+
+        if (requestId !== latestDraftRequestId) {
+          return;
+        }
+
         const draftJob = {
           id: "draft-preview",
           prompt: values.prompt.trim(),
@@ -142,6 +163,10 @@ export function createApp({
         };
         dispatch({ type: "draftChanged", job: draftJob });
       } catch {
+        if (requestId !== latestDraftRequestId) {
+          return;
+        }
+
         dispatch({ type: "draftChanged", job: null });
       }
     }, 220);
@@ -207,7 +232,10 @@ export function createApp({
   }
 
   const unbindJobForm = bindJobForm(elements, handleSubmit);
-  const unbindDraftInputs = bindPromptDraftInputs(elements, queueDraftGeneration);
+  const unbindDraftInputs = bindPromptDraftInputs(
+    elements,
+    queueDraftGeneration,
+  );
   const unbindHistory = bindHistoryControls(
     elements,
     () => dispatch({ type: "clearCompleted" }),

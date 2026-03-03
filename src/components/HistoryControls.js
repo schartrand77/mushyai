@@ -1,4 +1,8 @@
-export function bindHistoryControls(elements, onClearCompleted, onClearPreview) {
+export function bindHistoryControls(
+  elements,
+  onClearCompleted,
+  onClearPreview,
+) {
   elements.clearHistory.addEventListener("click", onClearCompleted);
   elements.clearPreview.addEventListener("click", onClearPreview);
 

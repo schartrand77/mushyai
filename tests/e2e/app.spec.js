@@ -61,9 +61,7 @@ test.describe("mushyai docker app", () => {
     );
   });
 
-  test("pins a delivered preview until it is cleared", async ({
-    page,
-  }) => {
+  test("pins a delivered preview until it is cleared", async ({ page }) => {
     await page.goto("/");
 
     await page
@@ -71,7 +69,9 @@ test.describe("mushyai docker app", () => {
       .fill("A brushed brass lantern with cutout stars and warm rim light");
     await page.getByRole("button", { name: "Queue generation" }).click();
 
-    await expect(page.locator("#preview-subject")).toContainText("Product model");
+    await expect(page.locator("#preview-subject")).toContainText(
+      "Product model",
+    );
     await expect(page.locator("#download-model")).toBeEnabled();
     await expect
       .poll(async () => page.locator("#preview-mode").textContent())

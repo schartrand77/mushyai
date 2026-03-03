@@ -46,8 +46,8 @@ export function renderJobs(elements, state, dispatch) {
       <div>
         <h3>${job.summary}</h3>
         <p class="job-config">${job.stylePreset} | ${job.topology} | ${
-      job.textureDetail
-    }</p>
+          job.textureDetail
+        }</p>
       </div>
       <span class="job-status ${job.stage === "complete" ? "complete" : ""}">
         ${stageLabel(job.stage)}

@@ -283,6 +283,71 @@ describe("app DOM behavior", () => {
     app.destroy();
   });
 
+  it("ignores stale draft responses and keeps the latest interpretation", async () => {
+    const storage = createStorage();
+    const apiClient = vi
+      .fn()
+      .mockImplementationOnce(
+        () =>
+          new Promise((resolve) => {
+            setTimeout(
+              () =>
+                resolve(
+                  generatePromptInterpretation({
+                    prompt: "A cube",
+                    stylePreset: "product",
+                    topology: "game-ready",
+                    textureDetail: "2k",
+                  }),
+                ),
+              20,
+            );
+          }),
+      )
+      .mockResolvedValueOnce(
+        generatePromptInterpretation({
+          prompt: "A frosted glass sphere with studio light",
+          stylePreset: "product",
+          topology: "game-ready",
+          textureDetail: "2k",
+        }),
+      );
+
+    const app = createApp({
+      document,
+      storage,
+      apiClient,
+    });
+
+    document.querySelector("#prompt").value = "A cube";
+    document
+      .querySelector("#prompt")
+      .dispatchEvent(new Event("input", { bubbles: true }));
+
+    vi.advanceTimersByTime(230);
+    await Promise.resolve();
+
+    document.querySelector("#prompt").value =
+      "A frosted glass sphere with studio light";
+    document
+      .querySelector("#prompt")
+      .dispatchEvent(new Event("input", { bubbles: true }));
+
+    vi.advanceTimersByTime(230);
+    await Promise.resolve();
+    await Promise.resolve();
+    vi.advanceTimersByTime(30);
+    await Promise.resolve();
+
+    expect(document.querySelector("#preview-subject").textContent).toContain(
+      "frosted glass sphere",
+    );
+    expect(document.querySelector("#preview-shape").textContent).toBe(
+      "Shape: sphere",
+    );
+    app.destroy();
+  });
+
   it("automatically advances the active job over time", async () => {
     const storage = createStorage();
     const app = createApp({
@@ -371,7 +436,8 @@ describe("app DOM behavior", () => {
       clock: () => new Date("2026-03-01T10:03:00.000Z"),
       apiClient: vi.fn().mockResolvedValue(
         generatePromptInterpretation({
-          prompt: "A brushed brass lantern with cutout stars and warm rim light",
+          prompt:
+            "A brushed brass lantern with cutout stars and warm rim light",
           stylePreset: "product",
           topology: "game-ready",
           textureDetail: "2k",
@@ -389,7 +455,9 @@ describe("app DOM behavior", () => {
     vi.advanceTimersByTime(6500);
 
     expect(app.getState().previewJob?.stage).toBe("complete");
-    expect(document.querySelector("#preview-mode").textContent).toBe("Delivered");
+    expect(document.querySelector("#preview-mode").textContent).toBe(
+      "Delivered",
+    );
     expect(document.querySelector("#preview-stage-label").textContent).toBe(
       "Stage: Delivered model",
     );

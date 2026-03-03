@@ -6,6 +6,14 @@ const REQUEST_LIMIT_BYTES = 1024 * 1024;
 const RATE_LIMIT_WINDOW_MS = 15_000;
 const RATE_LIMIT_MAX_REQUESTS = 40;
 const CACHE_MAX_ITEMS = 120;
+const STYLE_PRESETS = new Set([
+  "product",
+  "stylized",
+  "hard-surface",
+  "organic",
+]);
+const TOPOLOGIES = new Set(["game-ready", "cinematic"]);
+const TEXTURE_DETAILS = new Set(["1k", "2k", "4k", "8k"]);
 const generationCache = new Map();
 const requestBuckets = new Map();
 
@@ -83,24 +91,41 @@ function readBody(request) {
 
 function validateGeneratePayload(payload) {
   if (!payload || typeof payload !== "object") {
-    return "Request body is required.";
+    return { error: "Request body is required.", value: null };
   }
 
   if (typeof payload.prompt !== "string") {
-    return "Prompt is required.";
+    return { error: "Prompt is required.", value: null };
   }
 
   const prompt = payload.prompt.trim().replace(/\s+/g, " ");
 
   if (prompt.length < 3) {
-    return "Prompt must be at least 3 characters.";
+    return { error: "Prompt must be at least 3 characters.", value: null };
   }
 
   if (!/[a-z0-9]{3}/i.test(prompt)) {
-    return "Prompt must include recognizable words or object names.";
+    return {
+      error: "Prompt must include recognizable words or object names.",
+      value: null,
+    };
   }
 
-  return "";
+  return {
+    error: "",
+    value: {
+      prompt,
+      stylePreset: STYLE_PRESETS.has(payload.stylePreset)
+        ? payload.stylePreset
+        : "product",
+      topology: TOPOLOGIES.has(payload.topology)
+        ? payload.topology
+        : "game-ready",
+      textureDetail: TEXTURE_DETAILS.has(payload.textureDetail)
+        ? payload.textureDetail
+        : "2k",
+    },
+  };
 }
 
 function isJsonRequest(request) {
@@ -146,17 +171,18 @@ const server = http.createServer(async (request, response) => {
     return;
   }
 
-  if (
-    request.method === "POST" &&
-    pathname === "/api/generate"
-  ) {
+  if (request.method === "POST" && pathname === "/api/generate") {
     if (hitRateLimit(readClientId(request))) {
-      sendJson(response, 429, { error: "Too many requests. Slow down slightly." });
+      sendJson(response, 429, {
+        error: "Too many requests. Slow down slightly.",
+      });
       return;
     }
 
     if (!isJsonRequest(request)) {
-      sendJson(response, 415, { error: "Content-Type must be application/json." });
+      sendJson(response, 415, {
+        error: "Content-Type must be application/json.",
+      });
       return;
     }
   }
@@ -164,14 +190,14 @@ const server = http.createServer(async (request, response) => {
   if (request.method === "POST" && pathname === "/api/generate") {
     try {
       const payload = await readBody(request);
-      const error = validateGeneratePayload(payload);
+      const validation = validateGeneratePayload(payload);
 
-      if (error) {
-        sendJson(response, 400, { error });
+      if (validation.error) {
+        sendJson(response, 400, { error: validation.error });
         return;
       }
 
-      const result = await maybeCachedGeneration(payload);
+      const result = await maybeCachedGeneration(validation.value);
       sendJson(response, 200, result);
     } catch (error) {
       sendJson(response, 400, { error: error.message });

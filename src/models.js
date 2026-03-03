@@ -61,7 +61,7 @@ export function buildPreviewModel(job) {
       ? "Stage: Draft interpretation"
       : job.stage === "complete"
         ? "Stage: Delivered model"
-      : `Stage: ${stageLabel(job.stage)}`;
+        : `Stage: ${stageLabel(job.stage)}`;
 
   return {
     mode,

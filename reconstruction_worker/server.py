@@ -3,6 +3,8 @@ import json
 import math
 import os
 import time
+import urllib.error
+import urllib.request
 from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -13,6 +15,10 @@ PORT = int(os.environ.get("RECONSTRUCTION_PORT", "8000"))
 ARTIFACT_DIR = os.environ.get("RECONSTRUCTION_ARTIFACT_DIR", "").strip()
 MODEL_PROVIDER = os.environ.get("RECONSTRUCTION_MODEL_PROVIDER", "contour-prior-v1").strip()
 MODEL_VERSION = os.environ.get("RECONSTRUCTION_MODEL_VERSION", "0.1.0").strip()
+NEURAL_ENDPOINT_URL = os.environ.get("RECONSTRUCTION_NEURAL_ENDPOINT_URL", "").strip()
+NEURAL_ENDPOINT_TIMEOUT_SECONDS = float(
+    os.environ.get("RECONSTRUCTION_NEURAL_ENDPOINT_TIMEOUT_SECONDS", "6")
+)
 
 
 def normalize_points(points):
@@ -235,6 +241,117 @@ def infer_mesh_parameters(prompt, canonical_points, bbox):
     }
 
 
+def run_local_inference(prompt, canonical_points, bbox):
+    return infer_mesh_parameters(prompt, canonical_points, bbox), []
+
+
+def run_neural_endpoint_inference(prompt, canonical_points, bbox):
+    if not NEURAL_ENDPOINT_URL:
+        raise RuntimeError("RECONSTRUCTION_NEURAL_ENDPOINT_URL is not configured.")
+
+    payload = {
+        "prompt": prompt,
+        "silhouettePoints": canonical_points,
+        "boundingBox": bbox,
+    }
+    request = urllib.request.Request(
+        NEURAL_ENDPOINT_URL,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(
+            request, timeout=NEURAL_ENDPOINT_TIMEOUT_SECONDS
+        ) as response:
+            body = json.loads(response.read().decode("utf-8") or "{}")
+    except urllib.error.URLError as error:
+        raise RuntimeError(f"Neural endpoint request failed: {error}") from error
+
+    depth = float(body.get("depth", compute_depth_from_bbox(bbox)))
+    depth = round(max(0.16, min(0.5, depth)), 4)
+    vertex_budget_hint = int(body.get("vertexBudgetHint", len(canonical_points) * 6))
+    vertex_budget_hint = int(max(16, min(384, vertex_budget_hint)))
+    confidence = float(body.get("confidence", estimate_model_confidence(canonical_points, bbox)))
+    confidence = round(max(0.1, min(0.99, confidence)), 2)
+    provider_version = str(body.get("modelVersion", MODEL_VERSION))
+    model_features = body.get("inputFeatures")
+    if not isinstance(model_features, dict):
+        model_features = {
+            "silhouettePointCount": len(canonical_points),
+            "bboxAspectRatio": round(
+                float(bbox["width"]) / max(0.0001, float(bbox["height"])), 3
+            ),
+            "source": "neural-endpoint-default",
+        }
+
+    return (
+        {
+            "model": {
+                "provider": "neural-endpoint-v1",
+                "version": provider_version,
+                "inputFeatures": model_features,
+                "confidence": confidence,
+            },
+            "depth": depth,
+            "vertexBudgetHint": vertex_budget_hint,
+        },
+        [],
+    )
+
+
+def run_model_inference(prompt, canonical_points, bbox):
+    provider = MODEL_PROVIDER.lower()
+    if provider == "neural-endpoint-v1":
+        try:
+            return run_neural_endpoint_inference(prompt, canonical_points, bbox)
+        except Exception as error:
+            fallback, _ = run_local_inference(prompt, canonical_points, bbox)
+            fallback["model"]["provider"] = "contour-prior-v1"
+            fallback["model"]["version"] = MODEL_VERSION
+            fallback["model"]["fallbackFrom"] = "neural-endpoint-v1"
+            return fallback, [f"Neural inference failed, fallback used: {error}"]
+
+    return run_local_inference(prompt, canonical_points, bbox)
+
+
+def color_from_prompt(prompt):
+    digest = sha256(str(prompt or "").encode("utf-8")).hexdigest()
+    r = int(digest[0:2], 16)
+    g = int(digest[2:4], 16)
+    b = int(digest[4:6], 16)
+    # Keep texture in visible mid-range
+    r = int(60 + (r / 255) * 170)
+    g = int(60 + (g / 255) * 170)
+    b = int(60 + (b / 255) * 170)
+    return r, g, b
+
+
+def build_texture_ppm(prompt, size=64):
+    r, g, b = color_from_prompt(prompt)
+    header = f"P3\n{size} {size}\n255\n"
+    rows = []
+    for y in range(size):
+        row = []
+        for x in range(size):
+            shade = ((x + y) % 8) * 3
+            row.extend([str(max(0, min(255, r - shade))), str(max(0, min(255, g - shade))), str(max(0, min(255, b - shade)))])
+        rows.append(" ".join(row))
+    return header + "\n".join(rows) + "\n"
+
+
+def build_material_mtl(texture_file_name):
+    return (
+        "newmtl mushyai_material\n"
+        "Ka 1.000 1.000 1.000\n"
+        "Kd 1.000 1.000 1.000\n"
+        "Ks 0.150 0.150 0.150\n"
+        "Ns 32.0\n"
+        "d 1.0\n"
+        f"map_Kd {texture_file_name}\n"
+    )
+
+
 def build_job_id(reference_image, points):
     source = (
         f"{reference_image.get('sha256', '')}|"
@@ -245,7 +362,7 @@ def build_job_id(reference_image, points):
     return f"job-{int(time.time() * 1000)}-{digest}"
 
 
-def persist_artifacts(job_id, mesh, normalized_contour, manifest):
+def persist_artifacts(job_id, mesh, normalized_contour, manifest, material_text, texture_text):
     if not ARTIFACT_DIR:
         return None
 
@@ -255,10 +372,14 @@ def persist_artifacts(job_id, mesh, normalized_contour, manifest):
     manifest_path = job_dir / "manifest.json"
     contour_path = job_dir / "normalized_contour.json"
     mesh_path = job_dir / "reconstructed_mesh.obj"
+    material_path = job_dir / "reconstructed_material.mtl"
+    texture_path = job_dir / "reconstructed_basecolor.ppm"
 
     manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
     contour_path.write_text(json.dumps(normalized_contour, indent=2), encoding="utf-8")
     mesh_path.write_text(mesh["obj"], encoding="utf-8")
+    material_path.write_text(material_text, encoding="utf-8")
+    texture_path.write_text(texture_text, encoding="utf-8")
 
     return {
         "storage": "filesystem",
@@ -267,6 +388,8 @@ def persist_artifacts(job_id, mesh, normalized_contour, manifest):
             str(manifest_path.resolve()),
             str(contour_path.resolve()),
             str(mesh_path.resolve()),
+            str(material_path.resolve()),
+            str(texture_path.resolve()),
         ],
     }
 
@@ -296,7 +419,9 @@ def reconstruct_from_payload(payload):
     stage_times["preprocess"] = round((time.perf_counter() - preprocess_started) * 1000, 2)
 
     inference_started = time.perf_counter()
-    inference = infer_mesh_parameters(payload.get("prompt"), canonical_points, bbox)
+    inference, warnings = run_model_inference(
+        payload.get("prompt"), canonical_points, bbox
+    )
     stage_times["inference"] = round((time.perf_counter() - inference_started) * 1000, 2)
 
     mesh_started = time.perf_counter()
@@ -308,15 +433,19 @@ def reconstruct_from_payload(payload):
 
     postprocess_started = time.perf_counter()
     normalized_contour = dedupe_points(sort_points_by_angle(normalize_contour(canonical_points)))
+    texture_text = build_texture_ppm(payload.get("prompt"), size=64)
+    material_text = build_material_mtl("reconstructed_basecolor.ppm")
     job_id = build_job_id(reference_image, points)
     artifact_manifest = {
-        "pipelineVersion": "worker-pipeline-v0.3",
+        "pipelineVersion": "worker-pipeline-v0.4",
         "jobId": job_id,
         "stages": [
             "validate-silhouette",
             "canonicalize-contour",
+            "run-model-inference",
             "generate-mesh",
             "postprocess-mesh",
+            "generate-material-texture",
         ],
         "stats": {
             "sourcePointCount": len(points),
@@ -331,9 +460,20 @@ def reconstruct_from_payload(payload):
                 "faceCount": mesh["faceCount"],
                 "vertexBudgetHint": inference["vertexBudgetHint"],
             },
+            "texture": {
+                "format": "ppm",
+                "size": 64,
+            },
         },
     }
-    persisted = persist_artifacts(job_id, mesh, normalized_contour, artifact_manifest)
+    persisted = persist_artifacts(
+        job_id,
+        mesh,
+        normalized_contour,
+        artifact_manifest,
+        material_text,
+        texture_text,
+    )
     stage_times["postprocess"] = round((time.perf_counter() - postprocess_started) * 1000, 2)
     total_ms = round((time.perf_counter() - job_started) * 1000, 2)
 
@@ -347,7 +487,7 @@ def reconstruct_from_payload(payload):
                 "model": inference["model"],
                 "inputContourPoints": mesh["contourPoints"],
                 "telemetry": {
-                    "pipelineVersion": "worker-pipeline-v0.3",
+                    "pipelineVersion": "worker-pipeline-v0.4",
                     "timingsMs": stage_times,
                     "totalMs": total_ms,
                 },
@@ -368,6 +508,20 @@ def reconstruct_from_payload(payload):
                     "manifest": artifact_manifest,
                     "store": persisted,
                 },
+                "materials": {
+                    "format": "mtl",
+                    "fileName": "reconstructed_material.mtl",
+                    "content": material_text,
+                },
+                "textures": [
+                    {
+                        "kind": "baseColor",
+                        "format": "ppm",
+                        "fileName": "reconstructed_basecolor.ppm",
+                        "content": texture_text,
+                    }
+                ],
+                "warnings": warnings,
                 "mesh": {
                     "format": "obj",
                     "fileName": "worker_reconstructed_mesh.obj",

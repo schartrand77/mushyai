@@ -7,7 +7,7 @@ Move from deterministic prompt interpretation to trustworthy image-informed 3D r
 ## Current status (March 4, 2026)
 
 - Phase 1: Complete
-- Phase 2: In progress (service orchestration scaffold complete)
+- Phase 2: Complete
 - Phase 3: Partial scaffold, not production-ready
 - Phase 4: Partial coverage, expand as phases 2-3 land
 
@@ -37,7 +37,7 @@ Tests covering Phase 1:
 - `tests/backend.server.integration.test.js`
 - `tests/backend.generator.test.js`
 
-## Phase 2 - Single-image reconstruction backend (In progress)
+## Phase 2 - Single-image reconstruction backend (Complete)
 
 Implemented in this phase so far:
 
@@ -59,15 +59,15 @@ Implemented in this phase so far:
 - Added execution telemetry and resilience:
   - Worker response now includes per-stage timing (`telemetry.timingsMs`) and total runtime.
   - Backend worker client now retries transient failures before falling back to in-process reconstruction.
+- Added pluggable model runner contract:
+  - Local contour-prior inference path (`contour-prior-v1`).
+  - Optional neural endpoint path (`neural-endpoint-v1`) with safe fallback.
+- Added textured output packaging in worker response:
+  - OBJ mesh + MTL material + base-color texture artifact.
+  - Artifact persistence now includes mesh, manifest, contour, material, and texture files.
 - Added Docker wiring for local/e2e stacks:
   - `reconstruction-worker` service
   - backend dependency and worker URL env wiring.
-
-Required:
-
-- Replace heuristic mesh generation with a real image-to-3D reconstruction service.
-- Add preprocessing (segmentation, framing/canonicalization, background handling).
-- Generate mesh + textures with postprocess steps (retopo, UVs, manifold cleanup, scale normalization).
 
 Suggested architecture:
 

@@ -684,6 +684,14 @@ function buildProvenance(
     reconstruction && typeof reconstruction.telemetry === "object"
       ? reconstruction.telemetry
       : null;
+  const textures =
+    reconstruction && Array.isArray(reconstruction.textures)
+      ? reconstruction.textures
+      : [];
+  const materials =
+    reconstruction && typeof reconstruction.materials === "object"
+      ? reconstruction.materials
+      : null;
 
   return {
     promptSha256: sha256Hex(prompt),
@@ -748,6 +756,22 @@ function buildProvenance(
                 telemetry.timingsMs && typeof telemetry.timingsMs === "object"
                   ? telemetry.timingsMs
                   : {},
+            }
+          : null,
+      reconstructionAssets:
+        reconstruction && reconstruction.mesh
+          ? {
+              meshFormat:
+                typeof reconstruction.mesh.format === "string"
+                  ? reconstruction.mesh.format
+                  : "unknown",
+              materialFormat:
+                typeof materials?.format === "string" ? materials.format : null,
+              textureKinds: textures
+                .map((texture) =>
+                  typeof texture?.kind === "string" ? texture.kind : "",
+                )
+                .filter(Boolean),
             }
           : null,
     },

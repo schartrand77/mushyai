@@ -40,6 +40,8 @@ Optional backend worker settings:
 - `RECONSTRUCTION_ARTIFACT_DIR` (worker-side optional output directory for per-job artifacts)
 - `RECONSTRUCTION_MODEL_PROVIDER` (worker model id, default: `contour-prior-v1`)
 - `RECONSTRUCTION_MODEL_VERSION` (worker model version, default: `0.1.0`)
+- `RECONSTRUCTION_NEURAL_ENDPOINT_URL` (optional upstream model endpoint used by `neural-endpoint-v1`)
+- `RECONSTRUCTION_NEURAL_ENDPOINT_TIMEOUT_SECONDS` (timeout for upstream model endpoint requests)
 
 The stack is intentionally simple:
 

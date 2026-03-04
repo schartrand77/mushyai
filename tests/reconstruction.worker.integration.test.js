@@ -61,6 +61,8 @@ workerDescribe("reconstruction worker integration", () => {
         RECONSTRUCTION_HOST: HOST,
         RECONSTRUCTION_PORT: String(port),
         RECONSTRUCTION_ARTIFACT_DIR: artifactDir,
+        RECONSTRUCTION_MODEL_PROVIDER: "neural-endpoint-v1",
+        RECONSTRUCTION_MODEL_VERSION: "0.1.0",
       },
       stdio: ["ignore", "pipe", "pipe"],
     });
@@ -127,21 +129,27 @@ workerDescribe("reconstruction worker integration", () => {
     );
     expect(json.reconstruction.model.provider).toBe("contour-prior-v1");
     expect(json.reconstruction.model.version).toBe("0.1.0");
+    expect(json.reconstruction.model.fallbackFrom).toBe("neural-endpoint-v1");
     expect(typeof json.reconstruction.model.confidence).toBe("number");
     expect(json.reconstruction.telemetry.pipelineVersion).toBe(
-      "worker-pipeline-v0.3",
+      "worker-pipeline-v0.4",
     );
     expect(typeof json.reconstruction.telemetry.totalMs).toBe("number");
     expect(typeof json.reconstruction.telemetry.timingsMs.preprocess).toBe(
       "number",
     );
     expect(json.reconstruction.artifacts.manifest.pipelineVersion).toBe(
-      "worker-pipeline-v0.3",
+      "worker-pipeline-v0.4",
     );
     expect(json.reconstruction.postprocess.pipeline).toBe("mesh-postprocess-v1");
     expect(json.reconstruction.artifacts.store.storage).toBe("filesystem");
     expect(Array.isArray(json.reconstruction.artifacts.store.files)).toBe(true);
-    expect(json.reconstruction.artifacts.store.files.length).toBe(3);
+    expect(json.reconstruction.artifacts.store.files.length).toBe(5);
+    expect(json.reconstruction.materials.format).toBe("mtl");
+    expect(Array.isArray(json.reconstruction.textures)).toBe(true);
+    expect(json.reconstruction.textures[0].kind).toBe("baseColor");
+    expect(Array.isArray(json.reconstruction.warnings)).toBe(true);
+    expect(json.reconstruction.warnings.length).toBeGreaterThan(0);
     expect(json.reconstruction.mesh.content).toContain(
       "o mushyai_worker_reconstructed",
     );

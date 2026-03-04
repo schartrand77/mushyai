@@ -10,6 +10,7 @@ import {
 } from "./components/JobForm.js";
 import { renderSuggestions } from "./components/Suggestions.js";
 import { buildPreviewModel } from "./models.js";
+import { buildReferenceImageMetadata } from "./referenceImage.js";
 import {
   advanceJob,
   createInitialState,
@@ -56,6 +57,7 @@ export function createApp({
   storage = window.localStorage,
   clock = () => new Date(),
   apiClient = defaultApiClient,
+  referenceImageBuilder = buildReferenceImageMetadata,
 }) {
   const elements = queryElements(document);
   let state = loadState(storage);
@@ -66,6 +68,14 @@ export function createApp({
 
   function getActiveJob() {
     return state.jobs.find((job) => job.id === state.activeJobId) ?? null;
+  }
+
+  function validateSubmission(values) {
+    if (values.referenceImageFile) {
+      return "";
+    }
+
+    return validatePrompt(values.prompt);
   }
 
   function render() {
@@ -112,6 +122,11 @@ export function createApp({
     dispatch({ type: "fieldChanged", name: "prompt", value: values.prompt });
     dispatch({
       type: "fieldChanged",
+      name: "referenceCaption",
+      value: values.referenceCaption,
+    });
+    dispatch({
+      type: "fieldChanged",
       name: "stylePreset",
       value: values.stylePreset,
     });
@@ -141,7 +156,12 @@ export function createApp({
 
     draftTimer = setTimeout(async () => {
       try {
-        const generation = await apiClient("/api/generate", values);
+        const generation = await apiClient("/api/generate", {
+          prompt: values.prompt,
+          stylePreset: values.stylePreset,
+          topology: values.topology,
+          textureDetail: values.textureDetail,
+        });
 
         if (requestId !== latestDraftRequestId) {
           return;
@@ -176,8 +196,22 @@ export function createApp({
     const activeJob = getActiveJob();
     const previewJob = activeJob ?? state.draftJob ?? state.previewJob;
     const delivery = previewJob?.result?.delivery;
+    const exportGate = previewJob?.result?.export;
 
-    if (!delivery?.content) {
+    if (!delivery?.content || exportGate?.ready === false) {
+      if (exportGate?.ready === false) {
+        const remediation = Array.isArray(
+          previewJob?.result?.qualityReport?.remediation,
+        )
+          ? previewJob.result.qualityReport.remediation[0]
+          : "";
+        dispatch({
+          type: "messageChanged",
+          message: remediation
+            ? `Export blocked by quality gates. ${remediation}`
+            : "Export blocked by quality gates.",
+        });
+      }
       return;
     }
 
@@ -199,7 +233,7 @@ export function createApp({
   async function handleSubmit(event) {
     event.preventDefault();
     const values = readFormValues(elements);
-    const error = validatePrompt(values.prompt);
+    const error = validateSubmission(values);
 
     if (error) {
       dispatch({ type: "messageChanged", message: error });
@@ -207,18 +241,53 @@ export function createApp({
     }
 
     elements.submit.disabled = true;
+    let payload = null;
+
+    try {
+      payload = {
+        prompt: values.prompt,
+        stylePreset: values.stylePreset,
+        topology: values.topology,
+        textureDetail: values.textureDetail,
+      };
+
+      if (values.referenceImageFile) {
+        payload.referenceImage = await referenceImageBuilder(
+          values.referenceImageFile,
+          values.referenceCaption,
+        );
+      }
+    } catch (error) {
+      dispatch({
+        type: "messageChanged",
+        message: error.message || "Reference image validation failed.",
+      });
+      elements.submit.disabled = false;
+      return;
+    }
+
     dispatch({
       type: "messageChanged",
-      message: "Generating deterministic 3D spec...",
+      message: payload.referenceImage
+        ? "Generating deterministic 3D spec with reference provenance..."
+        : "Generating deterministic 3D spec...",
     });
 
     try {
-      const generation = await apiClient("/api/generate", values);
+      const generation = await apiClient("/api/generate", payload);
       const job = createJobFromGeneration(values, generation, clock());
+      const blockedMessage =
+        generation.export?.ready === false
+          ? `Job queued, but export is blocked. ${generation.qualityReport?.remediation?.[0] ?? "Improve source image and retry."}`
+          : "";
       dispatch({
         type: "jobQueued",
         job,
-        message: "Job queued. Deterministic generator responded successfully.",
+        message: blockedMessage
+          ? blockedMessage
+          : payload.referenceImage
+            ? "Job queued. Reference metadata was attached for provenance."
+            : "Job queued. Deterministic generator responded successfully.",
       });
       resetForm(elements);
     } catch (requestError) {

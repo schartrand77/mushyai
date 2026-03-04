@@ -2,6 +2,8 @@ export function queryElements(document) {
   return {
     form: document.querySelector("#job-form"),
     prompt: document.querySelector("#prompt"),
+    referenceImage: document.querySelector("#referenceImage"),
+    referenceCaption: document.querySelector("#referenceCaption"),
     stylePreset: document.querySelector("#stylePreset"),
     topology: document.querySelector("#topology"),
     textureDetail: document.querySelector("#textureDetail"),
@@ -32,6 +34,7 @@ export function queryElements(document) {
     debugSubject: document.querySelector("#debug-subject"),
     debugModifiers: document.querySelector("#debug-modifiers"),
     debugJson: document.querySelector("#debug-json"),
+    debugQuality: document.querySelector("#debug-quality"),
     debugScript: document.querySelector("#debug-script"),
   };
 }

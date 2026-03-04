@@ -14,6 +14,16 @@ const STYLE_PRESETS = new Set([
 ]);
 const TOPOLOGIES = new Set(["game-ready", "cinematic"]);
 const TEXTURE_DETAILS = new Set(["1k", "2k", "4k", "8k"]);
+const REFERENCE_IMAGE_TYPES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "image/svg+xml",
+]);
+const REFERENCE_IMAGE_MAX_BYTES = 8 * 1024 * 1024;
+const REFERENCE_IMAGE_MIN_DIMENSION = 128;
+const REFERENCE_IMAGE_MAX_DIMENSION = 4096;
+const REFERENCE_IMAGE_MAX_CONTOUR_POINTS = 256;
 const generationCache = new Map();
 const requestBuckets = new Map();
 
@@ -94,21 +104,169 @@ function validateGeneratePayload(payload) {
     return { error: "Request body is required.", value: null };
   }
 
-  if (typeof payload.prompt !== "string") {
-    return { error: "Prompt is required.", value: null };
+  const rawPrompt =
+    typeof payload.prompt === "string"
+      ? payload.prompt
+      : payload.prompt === undefined || payload.prompt === null
+        ? ""
+        : null;
+  if (rawPrompt === null) {
+    return { error: "Prompt must be a string when provided.", value: null };
+  }
+  const prompt = rawPrompt.trim().replace(/\s+/g, " ");
+
+  let referenceImage = null;
+  if (payload.referenceImage !== undefined && payload.referenceImage !== null) {
+    const value = payload.referenceImage;
+
+    if (!value || typeof value !== "object") {
+      return { error: "referenceImage must be an object.", value: null };
+    }
+
+    if (typeof value.fileName !== "string" || !value.fileName.trim()) {
+      return { error: "referenceImage.fileName is required.", value: null };
+    }
+
+    if (!REFERENCE_IMAGE_TYPES.has(value.mimeType)) {
+      return {
+        error: "referenceImage.mimeType must be PNG, JPEG, WEBP, or SVG.",
+        value: null,
+      };
+    }
+
+    if (
+      typeof value.sizeBytes !== "number" ||
+      !Number.isFinite(value.sizeBytes) ||
+      value.sizeBytes <= 0 ||
+      value.sizeBytes > REFERENCE_IMAGE_MAX_BYTES
+    ) {
+      return {
+        error: "referenceImage.sizeBytes must be between 1 and 8388608.",
+        value: null,
+      };
+    }
+
+    if (
+      !Number.isInteger(value.width) ||
+      !Number.isInteger(value.height) ||
+      value.width < REFERENCE_IMAGE_MIN_DIMENSION ||
+      value.height < REFERENCE_IMAGE_MIN_DIMENSION ||
+      value.width > REFERENCE_IMAGE_MAX_DIMENSION ||
+      value.height > REFERENCE_IMAGE_MAX_DIMENSION
+    ) {
+      return {
+        error: "referenceImage dimensions must be 128..4096 pixels.",
+        value: null,
+      };
+    }
+
+    if (
+      typeof value.sha256 !== "string" ||
+      !/^[0-9a-f]{64}$/i.test(value.sha256)
+    ) {
+      return {
+        error: "referenceImage.sha256 must be a 64-char hex digest.",
+        value: null,
+      };
+    }
+
+    const caption =
+      typeof value.caption === "string"
+        ? value.caption.trim().replace(/\s+/g, " ").slice(0, 160)
+        : "";
+    let silhouette = null;
+    if (value.silhouette !== undefined && value.silhouette !== null) {
+      const raw = value.silhouette;
+      if (!raw || typeof raw !== "object") {
+        return {
+          error: "referenceImage.silhouette must be an object.",
+          value: null,
+        };
+      }
+
+      if (
+        typeof raw.algorithm !== "string" ||
+        !raw.algorithm.trim() ||
+        !Array.isArray(raw.points)
+      ) {
+        return {
+          error:
+            "referenceImage.silhouette requires algorithm and points array.",
+          value: null,
+        };
+      }
+
+      if (
+        raw.points.length < 8 ||
+        raw.points.length > REFERENCE_IMAGE_MAX_CONTOUR_POINTS
+      ) {
+        return {
+          error: "referenceImage.silhouette.points must contain 8..256 points.",
+          value: null,
+        };
+      }
+
+      const points = [];
+      for (const point of raw.points) {
+        if (
+          !Array.isArray(point) ||
+          point.length !== 2 ||
+          typeof point[0] !== "number" ||
+          typeof point[1] !== "number" ||
+          !Number.isFinite(point[0]) ||
+          !Number.isFinite(point[1]) ||
+          point[0] < 0 ||
+          point[0] > 1 ||
+          point[1] < 0 ||
+          point[1] > 1
+        ) {
+          return {
+            error:
+              "referenceImage.silhouette points must be normalized [x,y] pairs.",
+            value: null,
+          };
+        }
+
+        points.push([Number(point[0].toFixed(4)), Number(point[1].toFixed(4))]);
+      }
+
+      silhouette = {
+        algorithm: raw.algorithm.trim().slice(0, 64),
+        pointCount: points.length,
+        points,
+      };
+    }
+
+    referenceImage = {
+      fileName: value.fileName.trim().slice(0, 128),
+      mimeType: value.mimeType,
+      sizeBytes: value.sizeBytes,
+      width: value.width,
+      height: value.height,
+      sha256: value.sha256.toLowerCase(),
+      caption,
+      silhouette,
+    };
   }
 
-  const prompt = payload.prompt.trim().replace(/\s+/g, " ");
-
-  if (prompt.length < 3) {
-    return { error: "Prompt must be at least 3 characters.", value: null };
-  }
-
-  if (!/[a-z0-9]{3}/i.test(prompt)) {
+  if (!prompt && !referenceImage) {
     return {
-      error: "Prompt must include recognizable words or object names.",
+      error: "Provide a prompt or a reference image.",
       value: null,
     };
+  }
+
+  if (prompt) {
+    if (prompt.length < 3) {
+      return { error: "Prompt must be at least 3 characters.", value: null };
+    }
+
+    if (!/[a-z0-9]{3}/i.test(prompt)) {
+      return {
+        error: "Prompt must include recognizable words or object names.",
+        value: null,
+      };
+    }
   }
 
   return {
@@ -124,6 +282,7 @@ function validateGeneratePayload(payload) {
       textureDetail: TEXTURE_DETAILS.has(payload.textureDetail)
         ? payload.textureDetail
         : "2k",
+      referenceImage,
     },
   };
 }
@@ -139,6 +298,7 @@ async function maybeCachedGeneration(payload) {
     stylePreset: payload.stylePreset,
     topology: payload.topology,
     textureDetail: payload.textureDetail,
+    referenceImage: payload.referenceImage,
   });
 
   if (generationCache.has(key)) {

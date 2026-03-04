@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 const MODEL_VERSION = "mushyai-ml-2026.03";
 
 function normalizePrompt(prompt) {
@@ -222,6 +224,10 @@ function summarizePrompt(prompt) {
   return prompt.length > 72 ? `${prompt.slice(0, 69)}...` : prompt;
 }
 
+function sha256Hex(value) {
+  return createHash("sha256").update(String(value)).digest("hex");
+}
+
 function buildPalette(shape, material, colors) {
   const basePalettes = {
     cube: { accentA: "#ce7a36", accentB: "#48616f", accentC: "#fff4dd" },
@@ -263,6 +269,321 @@ function buildPalette(shape, material, colors) {
   }
 
   return basePalettes[shape] ?? basePalettes.cube;
+}
+
+function polygonArea(points) {
+  let area = 0;
+
+  for (let index = 0; index < points.length; index += 1) {
+    const [x1, y1] = points[index];
+    const [x2, y2] = points[(index + 1) % points.length];
+    area += x1 * y2 - x2 * y1;
+  }
+
+  return area / 2;
+}
+
+function normalizeContourPoints(points) {
+  const mapped = points.map(([x, y]) => [
+    Number(x) * 2 - 1,
+    (1 - Number(y)) * 2 - 1,
+  ]);
+
+  let cx = 0;
+  let cy = 0;
+  for (const [x, y] of mapped) {
+    cx += x;
+    cy += y;
+  }
+  cx /= mapped.length;
+  cy /= mapped.length;
+
+  const centered = mapped.map(([x, y]) => [x - cx, y - cy]);
+  let maxAbs = 0;
+  for (const [x, y] of centered) {
+    maxAbs = Math.max(maxAbs, Math.abs(x), Math.abs(y));
+  }
+
+  const scale = maxAbs > 0 ? 1 / maxAbs : 1;
+  return centered.map(([x, y]) => [x * scale, y * scale]);
+}
+
+function sortPointsByAngle(points) {
+  let cx = 0;
+  let cy = 0;
+
+  for (const [x, y] of points) {
+    cx += x;
+    cy += y;
+  }
+  cx /= points.length;
+  cy /= points.length;
+
+  return [...points].sort((left, right) => {
+    const a1 = Math.atan2(left[1] - cy, left[0] - cx);
+    const a2 = Math.atan2(right[1] - cy, right[0] - cx);
+    return a1 - a2;
+  });
+}
+
+function dedupePoints(points) {
+  const deduped = [];
+
+  for (const point of points) {
+    const rounded = [Number(point[0].toFixed(4)), Number(point[1].toFixed(4))];
+    const previous = deduped[deduped.length - 1];
+    if (!previous || previous[0] !== rounded[0] || previous[1] !== rounded[1]) {
+      deduped.push(rounded);
+    }
+  }
+
+  return deduped;
+}
+
+function sanitizeSilhouettePoints(points) {
+  if (!Array.isArray(points)) {
+    return [];
+  }
+
+  const valid = [];
+  for (const point of points) {
+    if (
+      !Array.isArray(point) ||
+      point.length !== 2 ||
+      typeof point[0] !== "number" ||
+      typeof point[1] !== "number" ||
+      !Number.isFinite(point[0]) ||
+      !Number.isFinite(point[1]) ||
+      point[0] < 0 ||
+      point[0] > 1 ||
+      point[1] < 0 ||
+      point[1] > 1
+    ) {
+      continue;
+    }
+
+    valid.push([point[0], point[1]]);
+  }
+
+  return valid;
+}
+
+function buildObjFromContour(points, depth = 0.26) {
+  const contour = dedupePoints(
+    sortPointsByAngle(normalizeContourPoints(points)),
+  );
+
+  if (contour.length < 8) {
+    return null;
+  }
+
+  const ordered =
+    polygonArea(contour) < 0 ? [...contour].reverse() : [...contour];
+  const halfDepth = depth / 2;
+  const vertexLines = [];
+  const uvLines = [];
+  const faceLines = [];
+  const topOffset = 1;
+  const bottomOffset = topOffset + ordered.length;
+  const topCenterIndex = bottomOffset + ordered.length;
+  const bottomCenterIndex = topCenterIndex + 1;
+  const sideUvOffset = ordered.length * 2 + 1;
+
+  for (const [x, y] of ordered) {
+    vertexLines.push(
+      `v ${x.toFixed(4)} ${y.toFixed(4)} ${halfDepth.toFixed(4)}`,
+    );
+  }
+  for (const [x, y] of ordered) {
+    vertexLines.push(
+      `v ${x.toFixed(4)} ${y.toFixed(4)} ${(-halfDepth).toFixed(4)}`,
+    );
+  }
+  vertexLines.push(`v 0.0000 0.0000 ${halfDepth.toFixed(4)}`);
+  vertexLines.push(`v 0.0000 0.0000 ${(-halfDepth).toFixed(4)}`);
+
+  for (const [x, y] of ordered) {
+    uvLines.push(
+      `vt ${(x * 0.5 + 0.5).toFixed(4)} ${(y * 0.5 + 0.5).toFixed(4)}`,
+    );
+  }
+  for (const [x, y] of ordered) {
+    uvLines.push(
+      `vt ${(x * 0.5 + 0.5).toFixed(4)} ${(y * 0.5 + 0.5).toFixed(4)}`,
+    );
+  }
+  uvLines.push("vt 0.5000 0.5000");
+
+  for (let index = 0; index < ordered.length; index += 1) {
+    const next = (index + 1) % ordered.length;
+    const topA = topOffset + index;
+    const topB = topOffset + next;
+    const bottomA = bottomOffset + index;
+    const bottomB = bottomOffset + next;
+
+    faceLines.push(
+      `f ${topCenterIndex}/${sideUvOffset} ${topA}/${topA} ${topB}/${topB}`,
+    );
+    faceLines.push(
+      `f ${bottomCenterIndex}/${sideUvOffset} ${bottomB}/${bottomB} ${bottomA}/${bottomA}`,
+    );
+    faceLines.push(
+      `f ${topA}/${topA} ${bottomA}/${bottomA} ${bottomB}/${bottomB}`,
+    );
+    faceLines.push(`f ${topA}/${topA} ${bottomB}/${bottomB} ${topB}/${topB}`);
+  }
+
+  return {
+    obj: [
+      "# MushyAI silhouette reconstruction mesh",
+      "o mushyai_reconstructed",
+      ...vertexLines,
+      ...uvLines,
+      ...faceLines,
+      "",
+    ].join("\n"),
+    vertexCount: ordered.length * 2 + 2,
+    faceCount: faceLines.length,
+    contourPoints: ordered.length,
+  };
+}
+
+function buildReconstruction(referenceImage) {
+  const points = sanitizeSilhouettePoints(referenceImage?.silhouette?.points);
+
+  if (points.length < 8) {
+    return null;
+  }
+
+  const mesh = buildObjFromContour(points);
+
+  if (!mesh) {
+    return null;
+  }
+
+  return {
+    method: "silhouette-extrusion-v1",
+    inputContourPoints: mesh.contourPoints,
+    mesh: {
+      format: "obj",
+      fileName: "reconstructed_mesh.obj",
+      content: mesh.obj,
+      vertexCount: mesh.vertexCount,
+      faceCount: mesh.faceCount,
+    },
+  };
+}
+
+function clamp01(value) {
+  return Math.max(0, Math.min(1, value));
+}
+
+function round2(value) {
+  return Number(value.toFixed(2));
+}
+
+function computeQualityReport({
+  interpretation,
+  reconstruction,
+  referenceImage,
+  prompt,
+}) {
+  const hasReference = Boolean(referenceImage);
+  const silhouetteOverlap = hasReference
+    ? clamp01((reconstruction?.inputContourPoints ?? 0) / 24)
+    : 0.65;
+  const semanticAlignment = clamp01(
+    interpretation.confidence.shape * 0.6 +
+      interpretation.confidence.material * 0.3 +
+      (/\b(light|studio|rim|sunset|dramatic|soft)\b/i.test(prompt) ? 0.1 : 0),
+  );
+  const meshValidity = reconstruction?.mesh
+    ? clamp01(
+        (reconstruction.mesh.vertexCount >= 16 ? 0.4 : 0) +
+          (reconstruction.mesh.faceCount >= 24 ? 0.3 : 0) +
+          (reconstruction.mesh.faceCount /
+            Math.max(1, reconstruction.mesh.vertexCount) >
+          1
+            ? 0.3
+            : 0.1),
+      )
+    : 0.78;
+  const uvCoverage = reconstruction?.mesh ? 0.9 : 0.72;
+
+  const overall = clamp01(
+    silhouetteOverlap * 0.35 +
+      semanticAlignment * 0.3 +
+      meshValidity * 0.2 +
+      uvCoverage * 0.15,
+  );
+
+  const thresholds = {
+    silhouetteOverlap: hasReference ? 0.55 : 0.45,
+    semanticAlignment: 0.38,
+    meshValidity: 0.55,
+    uvCoverage: 0.6,
+    overall: hasReference ? 0.66 : 0.6,
+  };
+
+  const findings = [];
+  if (silhouetteOverlap < thresholds.silhouetteOverlap) {
+    findings.push("Low silhouette overlap against reference contour.");
+  }
+  if (semanticAlignment < thresholds.semanticAlignment) {
+    findings.push("Prompt/image semantic alignment is weak.");
+  }
+  if (meshValidity < thresholds.meshValidity) {
+    findings.push("Mesh validity score is below release threshold.");
+  }
+  if (uvCoverage < thresholds.uvCoverage) {
+    findings.push("UV coverage is below threshold.");
+  }
+  if (overall < thresholds.overall) {
+    findings.push("Overall confidence score is below export threshold.");
+  }
+
+  const remediation = [];
+  if (silhouetteOverlap < thresholds.silhouetteOverlap) {
+    remediation.push(
+      "Use a cleaner silhouette with high contrast and minimal background clutter.",
+    );
+  }
+  if (semanticAlignment < thresholds.semanticAlignment) {
+    remediation.push(
+      "Add explicit shape/material terms in the prompt and caption (e.g., 'glass sphere').",
+    );
+  }
+  if (meshValidity < thresholds.meshValidity) {
+    remediation.push(
+      "Retry with a centered front/side image to improve contour stability.",
+    );
+  }
+  if (uvCoverage < thresholds.uvCoverage) {
+    remediation.push(
+      "Use an image with complete object framing to improve UV projection.",
+    );
+  }
+
+  const metrics = {
+    silhouetteOverlap: round2(silhouetteOverlap),
+    semanticAlignment: round2(semanticAlignment),
+    meshValidity: round2(meshValidity),
+    uvCoverage: round2(uvCoverage),
+    overall: round2(overall),
+  };
+
+  const pass = findings.length === 0;
+
+  return {
+    version: "quality-gates-v1",
+    metrics,
+    thresholds,
+    pass,
+    findings,
+    remediation: remediation.length
+      ? remediation
+      : ["No remediation required. Export-ready."],
+  };
 }
 
 function blenderPrimitive(shape) {
@@ -336,7 +657,46 @@ function buildPromptPackage(prompt, interpretation) {
   return directives.join("\n");
 }
 
-function buildDeliveryPackage(summary, prompt, interpretation, blenderScript) {
+function buildProvenance(prompt, interpretation, referenceImage) {
+  return {
+    promptSha256: sha256Hex(prompt),
+    referenceImage: referenceImage
+      ? {
+          fileName: referenceImage.fileName,
+          mimeType: referenceImage.mimeType,
+          sizeBytes: referenceImage.sizeBytes,
+          width: referenceImage.width,
+          height: referenceImage.height,
+          sha256: referenceImage.sha256,
+          caption: referenceImage.caption ?? "",
+        }
+      : null,
+    processing: {
+      modelVersion: MODEL_VERSION,
+      classifier: "weighted-keyword-ensemble",
+      stylePreset: interpretation.stylePreset,
+      topology: interpretation.topology,
+      textureDetail: interpretation.textureDetail,
+      inputMode: referenceImage
+        ? "prompt-plus-reference-metadata"
+        : "prompt-only",
+      reconstruction: referenceImage?.silhouette
+        ? "silhouette-extrusion-v1"
+        : "heuristic-primitive-generation",
+    },
+  };
+}
+
+function buildDeliveryPackage(
+  summary,
+  prompt,
+  interpretation,
+  blenderScript,
+  provenance,
+  reconstruction,
+  qualityReport,
+  exportGate,
+) {
   const safeBaseName = summarizePrompt(summary)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, "-")
@@ -353,6 +713,10 @@ function buildDeliveryPackage(summary, prompt, interpretation, blenderScript) {
         prompt,
         promptPackage: buildPromptPackage(prompt, interpretation),
         interpretation,
+        provenance,
+        reconstruction,
+        qualityReport,
+        export: exportGate,
         blenderScript,
       },
       null,
@@ -414,6 +778,7 @@ export function generatePromptInterpretation({
   stylePreset = "product",
   topology = "game-ready",
   textureDetail = "2k",
+  referenceImage = null,
 }) {
   const cleanPrompt = normalizePrompt(prompt);
   const shapeScore = detectShape(cleanPrompt);
@@ -441,6 +806,25 @@ export function generatePromptInterpretation({
       material: materialScore.confidence,
     },
   };
+  const reconstruction = buildReconstruction(referenceImage);
+  const qualityReport = computeQualityReport({
+    interpretation,
+    reconstruction,
+    referenceImage,
+    prompt: cleanPrompt,
+  });
+  const exportGate = {
+    ready: qualityReport.pass,
+    blockedReason: qualityReport.pass
+      ? ""
+      : "Quality gates did not pass. Export is blocked.",
+  };
+
+  const provenance = buildProvenance(
+    cleanPrompt,
+    interpretation,
+    referenceImage,
+  );
 
   const blenderScript = generateBlenderScript({
     prompt: cleanPrompt,
@@ -460,24 +844,35 @@ export function generatePromptInterpretation({
       stylePreset,
       topology,
       textureDetail,
+      referenceImage,
     },
     interpretation,
     promptPackage: buildPromptPackage(cleanPrompt, interpretation),
+    provenance,
     model: {
       version: MODEL_VERSION,
       classifier: "weighted-keyword-ensemble",
+      reconstruction:
+        reconstruction?.method ?? "heuristic-primitive-generation",
     },
+    qualityReport,
+    export: exportGate,
     preview: {
       shape: interpretation.shape,
       material: interpretation.material,
       palette,
     },
     blenderScript,
+    reconstruction,
     delivery: buildDeliveryPackage(
       summary,
       cleanPrompt,
       interpretation,
       blenderScript,
+      provenance,
+      reconstruction,
+      qualityReport,
+      exportGate,
     ),
   };
 }

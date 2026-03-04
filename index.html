@@ -53,16 +53,41 @@
 
           <form id="job-form" class="job-form" novalidate>
             <label class="field">
-              <span>Prompt</span>
+              <span>Prompt (optional with reference image)</span>
               <textarea
                 id="prompt"
                 name="prompt"
                 rows="5"
                 maxlength="280"
                 placeholder="Describe the subject, silhouette, materials, lighting, and surface details you want delivered."
-                required
               ></textarea>
             </label>
+
+            <label class="field">
+              <span>Reference image (optional)</span>
+              <input
+                id="referenceImage"
+                name="referenceImage"
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+              />
+            </label>
+
+            <label class="field">
+              <span>Reference caption (optional)</span>
+              <input
+                id="referenceCaption"
+                name="referenceCaption"
+                type="text"
+                maxlength="160"
+                placeholder="e.g., front-left product photo, neutral background"
+              />
+            </label>
+            <p class="feedback">
+              Reference images now run through an experimental
+              silhouette-to-mesh reconstruction pass. Output quality varies and
+              should be reviewed before production use.
+            </p>
 
             <div class="field-grid">
               <label class="field">
@@ -183,6 +208,10 @@
             <label class="debug-block">
               <span>Interpreted spec</span>
               <pre id="debug-json">{}</pre>
+            </label>
+            <label class="debug-block">
+              <span>Quality report</span>
+              <pre id="debug-quality">No quality report yet.</pre>
             </label>
             <label class="debug-block">
               <span>Blender Python</span>

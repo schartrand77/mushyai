@@ -11,6 +11,7 @@ export const STAGES = [
 
 export const DEFAULT_FORM = {
   prompt: "",
+  referenceCaption: "",
   stylePreset: "product",
   topology: "game-ready",
   textureDetail: "2k",
@@ -235,6 +236,17 @@ export function reducer(state, action) {
       );
       const stillActive =
         action.job.stage === "complete" ? null : action.job.id;
+      const blocked =
+        action.job.stage === "complete" &&
+        action.job.result?.export?.ready === false;
+      const blockedReason =
+        action.job.result?.export?.blockedReason ??
+        "Quality gates did not pass. Export is blocked.";
+      const remediation = Array.isArray(
+        action.job.result?.qualityReport?.remediation,
+      )
+        ? action.job.result.qualityReport.remediation[0]
+        : "";
       return {
         ...state,
         jobs: nextJobs,
@@ -245,7 +257,9 @@ export function reducer(state, action) {
             : state.previewJob,
         lastMessage:
           action.job.stage === "complete"
-            ? "Job complete. Asset is ready for export."
+            ? blocked
+              ? `${blockedReason}${remediation ? ` ${remediation}` : ""}`
+              : "Job complete. Asset is ready for export."
             : `Active stage: ${stageLabel(action.job.stage)}.`,
       };
     }

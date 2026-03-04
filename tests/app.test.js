@@ -26,6 +26,8 @@ function mountDom() {
     <main>
       <form id="job-form">
         <textarea id="prompt"></textarea>
+        <input id="referenceImage" type="file" />
+        <input id="referenceCaption" type="text" />
         <select id="stylePreset"><option value="product">Product</option><option value="stylized">Stylized</option></select>
         <select id="topology"><option value="game-ready">Game ready</option><option value="cinematic">Cinematic</option></select>
         <select id="textureDetail"><option value="2k">2K</option><option value="4k">4K</option></select>
@@ -56,6 +58,7 @@ function mountDom() {
       <h3 id="debug-subject"></h3>
       <p id="debug-modifiers"></p>
       <pre id="debug-json"></pre>
+      <pre id="debug-quality"></pre>
       <pre id="debug-script"></pre>
     </main>
   `;
@@ -66,6 +69,7 @@ describe("app state helpers", () => {
     expect(createInitialState()).toEqual({
       form: {
         prompt: "",
+        referenceCaption: "",
         stylePreset: "product",
         topology: "game-ready",
         textureDetail: "2k",
@@ -149,6 +153,59 @@ describe("app state helpers", () => {
     expect(result.promptPackage).toContain("Delivery goal:");
     expect(result.delivery.fileName).toMatch(/\.json$/);
     expect(result.blenderScript).toContain("primitive_uv_sphere_add");
+    expect(result.provenance.processing.inputMode).toBe("prompt-only");
+    expect(result.qualityReport.pass).toBe(true);
+    expect(result.export.ready).toBe(true);
+  });
+
+  it("includes reference-image provenance metadata in output packages", () => {
+    const result = generatePromptInterpretation({
+      prompt: "A frosted glass sphere with studio light",
+      stylePreset: "product",
+      topology: "game-ready",
+      textureDetail: "2k",
+      referenceImage: {
+        fileName: "sphere.jpg",
+        mimeType: "image/jpeg",
+        sizeBytes: 2048,
+        width: 1024,
+        height: 1024,
+        sha256: "a".repeat(64),
+        caption: "front view",
+        silhouette: {
+          algorithm: "radial-mask-v1",
+          points: [
+            [0.5, 0.1],
+            [0.64, 0.16],
+            [0.76, 0.28],
+            [0.9, 0.5],
+            [0.84, 0.66],
+            [0.72, 0.8],
+            [0.5, 0.9],
+            [0.32, 0.82],
+            [0.18, 0.68],
+            [0.1, 0.5],
+            [0.18, 0.3],
+            [0.34, 0.16],
+          ],
+        },
+      },
+    });
+
+    expect(result.input.referenceImage?.fileName).toBe("sphere.jpg");
+    expect(result.provenance.referenceImage?.sha256).toBe("a".repeat(64));
+    expect(result.provenance.processing.inputMode).toBe(
+      "prompt-plus-reference-metadata",
+    );
+    expect(result.delivery.content).toContain('"provenance"');
+    expect(result.reconstruction?.method).toBe("silhouette-extrusion-v1");
+    expect(result.reconstruction?.mesh?.format).toBe("obj");
+    expect(result.reconstruction?.mesh?.content).toContain(
+      "o mushyai_reconstructed",
+    );
+    expect(result.delivery.content).toContain('"reconstruction"');
+    expect(result.qualityReport.metrics.overall).toBeGreaterThan(0);
+    expect(result.delivery.content).toContain('"qualityReport"');
   });
 
   it("treats apples as organic spherical subjects", () => {
@@ -232,6 +289,206 @@ describe("app DOM behavior", () => {
     expect(document.querySelector("#download-model").disabled).toBe(false);
     expect(document.querySelector("#debug-script").textContent).toContain(
       "primitive_cylinder_add",
+    );
+    expect(document.querySelector("#debug-quality").textContent).toContain(
+      '"overall"',
+    );
+    app.destroy();
+  });
+
+  it("attaches validated reference image metadata to submit payload", async () => {
+    const storage = createStorage();
+    const apiClient = vi.fn().mockResolvedValue(
+      generatePromptInterpretation({
+        prompt:
+          "A lacquered tea tin with embossed cranes and brushed brass lid",
+        stylePreset: "stylized",
+        topology: "game-ready",
+        textureDetail: "2k",
+      }),
+    );
+
+    const referenceImageBuilder = vi.fn().mockResolvedValue({
+      fileName: "tin.png",
+      mimeType: "image/png",
+      sizeBytes: 1024,
+      width: 512,
+      height: 512,
+      sha256: "b".repeat(64),
+      caption: "front-left angle",
+    });
+
+    const app = createApp({
+      document,
+      storage,
+      apiClient,
+      referenceImageBuilder,
+    });
+
+    const fileInput = document.querySelector("#referenceImage");
+    Object.defineProperty(fileInput, "files", {
+      configurable: true,
+      value: [{ name: "tin.png", size: 1024, type: "image/png" }],
+    });
+    document.querySelector("#referenceCaption").value = "front-left angle";
+    document.querySelector("#prompt").value =
+      "A lacquered tea tin with embossed cranes and brushed brass lid";
+    document.querySelector("#stylePreset").value = "stylized";
+
+    document
+      .querySelector("#job-form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+
+    expect(referenceImageBuilder).toHaveBeenCalledTimes(1);
+    expect(apiClient).toHaveBeenCalledWith(
+      "/api/generate",
+      expect.objectContaining({
+        referenceImage: expect.objectContaining({
+          fileName: "tin.png",
+          sha256: "b".repeat(64),
+        }),
+      }),
+    );
+    app.destroy();
+  });
+
+  it("allows submit with reference image and no prompt", async () => {
+    const storage = createStorage();
+    const apiClient = vi.fn().mockResolvedValue(
+      generatePromptInterpretation({
+        prompt: "",
+        stylePreset: "product",
+        topology: "game-ready",
+        textureDetail: "2k",
+        referenceImage: {
+          fileName: "shape.png",
+          mimeType: "image/png",
+          sizeBytes: 1024,
+          width: 512,
+          height: 512,
+          sha256: "9".repeat(64),
+          silhouette: {
+            algorithm: "radial-mask-v1",
+            points: [
+              [0.5, 0.1],
+              [0.7, 0.2],
+              [0.9, 0.5],
+              [0.7, 0.8],
+              [0.5, 0.9],
+              [0.3, 0.8],
+              [0.1, 0.5],
+              [0.3, 0.2],
+            ],
+          },
+        },
+      }),
+    );
+    const referenceImageBuilder = vi.fn().mockResolvedValue({
+      fileName: "shape.png",
+      mimeType: "image/png",
+      sizeBytes: 1024,
+      width: 512,
+      height: 512,
+      sha256: "9".repeat(64),
+      silhouette: {
+        algorithm: "radial-mask-v1",
+        points: [
+          [0.5, 0.1],
+          [0.7, 0.2],
+          [0.9, 0.5],
+          [0.7, 0.8],
+          [0.5, 0.9],
+          [0.3, 0.8],
+          [0.1, 0.5],
+          [0.3, 0.2],
+        ],
+      },
+    });
+
+    const app = createApp({
+      document,
+      storage,
+      apiClient,
+      referenceImageBuilder,
+    });
+
+    const fileInput = document.querySelector("#referenceImage");
+    Object.defineProperty(fileInput, "files", {
+      configurable: true,
+      value: [{ name: "shape.png", size: 1024, type: "image/png" }],
+    });
+    document.querySelector("#prompt").value = "";
+
+    document
+      .querySelector("#job-form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(apiClient).toHaveBeenCalledWith(
+      "/api/generate",
+      expect.objectContaining({
+        prompt: "",
+        referenceImage: expect.objectContaining({ fileName: "shape.png" }),
+      }),
+    );
+    expect(app.getState().jobs).toHaveLength(1);
+    app.destroy();
+  });
+
+  it("blocks export when quality gates fail and shows remediation", async () => {
+    const storage = createStorage();
+    const lowQualityGeneration = generatePromptInterpretation({
+      prompt: "thing",
+      stylePreset: "product",
+      topology: "game-ready",
+      textureDetail: "2k",
+      referenceImage: {
+        fileName: "low.png",
+        mimeType: "image/png",
+        sizeBytes: 1024,
+        width: 512,
+        height: 512,
+        sha256: "c".repeat(64),
+        caption: "",
+        silhouette: {
+          algorithm: "radial-mask-v1",
+          points: [
+            [0.5, 0.2],
+            [0.65, 0.28],
+            [0.75, 0.45],
+            [0.7, 0.62],
+            [0.5, 0.72],
+            [0.32, 0.62],
+            [0.24, 0.45],
+            [0.34, 0.28],
+          ],
+        },
+      },
+    });
+    expect(lowQualityGeneration.export.ready).toBe(false);
+
+    const app = createApp({
+      document,
+      storage,
+      apiClient: vi.fn().mockResolvedValue(lowQualityGeneration),
+    });
+
+    document.querySelector("#prompt").value = "thing";
+    document
+      .querySelector("#job-form")
+      .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await Promise.resolve();
+    await Promise.resolve();
+    vi.advanceTimersByTime(6500);
+
+    expect(document.querySelector("#download-model").disabled).toBe(true);
+    expect(document.querySelector("#form-feedback").textContent).toContain(
+      "Export is blocked",
+    );
+    expect(document.querySelector("#preview-copy").textContent).toContain(
+      "Export blocked",
     );
     app.destroy();
   });

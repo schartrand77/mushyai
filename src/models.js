@@ -22,6 +22,7 @@ function emptyDebugModel() {
     subject: "No generation data yet",
     modifiers: "Awaiting prompt interpretation",
     json: "{}",
+    quality: "No quality report yet.",
     script: EMPTY_DEBUG_SCRIPT,
   };
 }
@@ -56,6 +57,11 @@ export function buildPreviewModel(job) {
   const material = preview.material ?? interpretation.material ?? "default";
   const lighting = interpretation.lighting ?? "Balanced key light";
   const mode = job.stage === "complete" ? "delivered" : "concept";
+  const exportReady = job.result?.export?.ready !== false;
+  const blockedReason = job.result?.export?.blockedReason ?? "";
+  const remediation = Array.isArray(job.result?.qualityReport?.remediation)
+    ? job.result.qualityReport.remediation
+    : [];
   const stage =
     job.stage === "draft"
       ? "Stage: Draft interpretation"
@@ -70,14 +76,16 @@ export function buildPreviewModel(job) {
     subject: job.summary,
     copy:
       job.stage === "complete"
-        ? `${lighting}. Delivered model package is pinned here until you clear it.`
+        ? exportReady
+          ? `${lighting}. Delivered model package is pinned here until you clear it.`
+          : `${lighting}. Export blocked: ${blockedReason} ${remediation[0] ?? ""}`
         : `${lighting}. Preview geometry biased toward ${shape} form cues from the interpreted prompt.`,
     shapeLabel: `Shape: ${shape}`,
     materialLabel: `Material: ${material}`,
     style: `Style: ${titleCase(job.stylePreset)}`,
     topology: `Topology: ${titleCase(job.topology)}`,
     stage,
-    canDownload: Boolean(job.result?.delivery?.content),
+    canDownload: Boolean(job.result?.delivery?.content) && exportReady,
     accentA: preview.palette?.accentA ?? `hsl(${warm} 74% 58%)`,
     accentB: preview.palette?.accentB ?? `hsl(${cool} 30% 37%)`,
     accentC: preview.palette?.accentC ?? `hsl(${deep} 100% 92%)`,
@@ -101,6 +109,7 @@ export function buildDebugModel(job) {
         ? modifiers.map(titleCase).join(" | ")
         : "No modifiers detected",
     json: prettyJson(interpretation),
+    quality: prettyJson(job.result.qualityReport ?? {}),
     script: job.result.blenderScript ?? EMPTY_DEBUG_SCRIPT,
   };
 }

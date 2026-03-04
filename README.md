@@ -11,6 +11,12 @@ The app includes:
 - Unit tests plus containerized Playwright browser tests against the built image
 - ESLint, Prettier, and a Vite production build
 
+## Current capability boundary
+
+- This project currently implements a **deterministic prompt-to-3D-spec workflow**.
+- It does **not** yet implement true 2D-image upload to accurate 3D reconstruction.
+- See `AUDIT_2D_TO_3D.md` for a concrete gap analysis and implementation plan.
+
 ## Local development
 
 - `npm install`

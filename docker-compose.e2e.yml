@@ -25,6 +25,7 @@ services:
     environment:
       RECONSTRUCTION_WORKER_URL: http://reconstruction-worker:8000
       RECONSTRUCTION_WORKER_TIMEOUT_MS: 8000
+      RECONSTRUCTION_WORKER_RETRIES: 1
     depends_on:
       reconstruction-worker:
         condition: service_healthy
@@ -42,6 +43,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.reconstruction
+    environment:
+      RECONSTRUCTION_ARTIFACT_DIR: /tmp/mushyai-worker-artifacts
+      RECONSTRUCTION_MODEL_PROVIDER: contour-prior-v1
+      RECONSTRUCTION_MODEL_VERSION: 0.1.0
     healthcheck:
       test:
         [

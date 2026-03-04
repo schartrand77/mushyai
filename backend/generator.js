@@ -664,6 +664,27 @@ function buildProvenance(
   reconstruction,
   reconstructionProvider,
 ) {
+  const preprocess =
+    reconstruction && typeof reconstruction.preprocess === "object"
+      ? reconstruction.preprocess
+      : null;
+  const postprocess =
+    reconstruction && typeof reconstruction.postprocess === "object"
+      ? reconstruction.postprocess
+      : null;
+  const artifacts =
+    reconstruction && typeof reconstruction.artifacts === "object"
+      ? reconstruction.artifacts
+      : null;
+  const model =
+    reconstruction && typeof reconstruction.model === "object"
+      ? reconstruction.model
+      : null;
+  const telemetry =
+    reconstruction && typeof reconstruction.telemetry === "object"
+      ? reconstruction.telemetry
+      : null;
+
   return {
     promptSha256: sha256Hex(prompt),
     referenceImage: referenceImage
@@ -691,6 +712,44 @@ function buildProvenance(
       reconstructionProvider:
         reconstructionProvider ??
         (referenceImage ? "in-process-fallback" : "none"),
+      preprocessingPipeline:
+        preprocess?.pipeline ?? (referenceImage ? "none" : "not-applicable"),
+      artifactManifest:
+        artifacts && typeof artifacts.manifest === "object"
+          ? artifacts.manifest
+          : null,
+      postprocessPipeline:
+        postprocess?.pipeline ?? (referenceImage ? "none" : "not-applicable"),
+      artifactStore:
+        artifacts && typeof artifacts.store === "object"
+          ? artifacts.store
+          : null,
+      reconstructionModel:
+        model && typeof model.provider === "string"
+          ? {
+              provider: model.provider,
+              version:
+                typeof model.version === "string" ? model.version : "unknown",
+              confidence:
+                typeof model.confidence === "number"
+                  ? Number(model.confidence.toFixed(2))
+                  : null,
+            }
+          : null,
+      reconstructionTelemetry:
+        telemetry && typeof telemetry.totalMs === "number"
+          ? {
+              pipelineVersion:
+                typeof telemetry.pipelineVersion === "string"
+                  ? telemetry.pipelineVersion
+                  : "unknown",
+              totalMs: Number(telemetry.totalMs.toFixed(2)),
+              timingsMs:
+                telemetry.timingsMs && typeof telemetry.timingsMs === "object"
+                  ? telemetry.timingsMs
+                  : {},
+            }
+          : null,
     },
   };
 }

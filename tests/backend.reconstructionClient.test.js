@@ -35,6 +35,7 @@ describe("reconstruction worker client", () => {
   beforeEach(() => {
     delete process.env.RECONSTRUCTION_WORKER_URL;
     delete process.env.RECONSTRUCTION_WORKER_TIMEOUT_MS;
+    delete process.env.RECONSTRUCTION_WORKER_RETRIES;
   });
 
   it("returns disabled mode when worker URL is unset", async () => {
@@ -50,7 +51,36 @@ describe("reconstruction worker client", () => {
       json: async () => ({
         reconstruction: {
           method: "worker-silhouette-extrusion-v1",
+          model: {
+            provider: "contour-prior-v1",
+            version: "0.1.0",
+            confidence: 0.81,
+          },
+          telemetry: {
+            pipelineVersion: "worker-pipeline-v0.3",
+            totalMs: 6.3,
+            timingsMs: {
+              preprocess: 1.2,
+              inference: 0.8,
+              mesh: 2.4,
+              postprocess: 0.9,
+            },
+          },
           inputContourPoints: 16,
+          preprocess: {
+            pipeline: "silhouette-canonicalization-v1",
+          },
+          artifacts: {
+            manifest: {
+              pipelineVersion: "worker-pipeline-v0.3",
+            },
+          },
+          postprocess: {
+            pipeline: "mesh-postprocess-v1",
+            depth: 0.26,
+            vertexCount: 64,
+            faceCount: 128,
+          },
           mesh: {
             format: "obj",
             fileName: "mesh.obj",
@@ -68,6 +98,13 @@ describe("reconstruction worker client", () => {
     expect(result.mode).toBe("worker");
     expect(result.warning).toBe("");
     expect(result.reconstruction?.method).toBe("worker-silhouette-extrusion-v1");
+    expect(result.reconstruction?.preprocess?.pipeline).toBe(
+      "silhouette-canonicalization-v1",
+    );
+    expect(result.reconstruction?.postprocess?.pipeline).toBe(
+      "mesh-postprocess-v1",
+    );
+    expect(result.reconstruction?.model?.provider).toBe("contour-prior-v1");
   });
 
   it("returns failed mode when worker response schema is invalid", async () => {
@@ -81,5 +118,34 @@ describe("reconstruction worker client", () => {
 
     expect(result.mode).toBe("failed");
     expect(result.warning).toContain("schema");
+  });
+
+  it("retries worker calls before failing", async () => {
+    process.env.RECONSTRUCTION_WORKER_URL = "http://worker.internal";
+    process.env.RECONSTRUCTION_WORKER_RETRIES = "2";
+    const fetchImpl = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("socket hang up"))
+      .mockRejectedValueOnce(new Error("socket hang up"))
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          reconstruction: {
+            method: "worker-silhouette-extrusion-v1",
+            mesh: {
+              format: "obj",
+              fileName: "mesh.obj",
+              content: "o mesh",
+              vertexCount: 64,
+              faceCount: 128,
+            },
+          },
+        }),
+      });
+
+    const result = await requestWorkerReconstruction(basePayload(), fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    expect(result.mode).toBe("worker");
   });
 });

@@ -2,11 +2,17 @@
 import json
 import math
 import os
+import time
+from hashlib import sha256
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from pathlib import Path
 
 
 HOST = os.environ.get("RECONSTRUCTION_HOST", "0.0.0.0")
 PORT = int(os.environ.get("RECONSTRUCTION_PORT", "8000"))
+ARTIFACT_DIR = os.environ.get("RECONSTRUCTION_ARTIFACT_DIR", "").strip()
+MODEL_PROVIDER = os.environ.get("RECONSTRUCTION_MODEL_PROVIDER", "contour-prior-v1").strip()
+MODEL_VERSION = os.environ.get("RECONSTRUCTION_MODEL_VERSION", "0.1.0").strip()
 
 
 def normalize_points(points):
@@ -70,6 +76,49 @@ def normalize_contour(points):
     return [[point[0] * scale, point[1] * scale] for point in centered]
 
 
+def compute_bbox(points):
+    min_x = min(point[0] for point in points)
+    min_y = min(point[1] for point in points)
+    max_x = max(point[0] for point in points)
+    max_y = max(point[1] for point in points)
+    width = max(0.0, max_x - min_x)
+    height = max(0.0, max_y - min_y)
+    center_x = min_x + width / 2
+    center_y = min_y + height / 2
+    return {
+        "minX": round(min_x, 4),
+        "minY": round(min_y, 4),
+        "maxX": round(max_x, 4),
+        "maxY": round(max_y, 4),
+        "width": round(width, 4),
+        "height": round(height, 4),
+        "centerX": round(center_x, 4),
+        "centerY": round(center_y, 4),
+    }
+
+
+def canonicalize_points(points):
+    bbox = compute_bbox(points)
+    width = bbox["width"]
+    height = bbox["height"]
+    largest = max(width, height)
+    if largest <= 0:
+        return [], bbox, {"scaleToUnitSquare": 1.0, "padding": 0.08}
+
+    padding = 0.08
+    scale_to_unit = (1.0 - padding * 2) / largest
+    center_x = bbox["centerX"]
+    center_y = bbox["centerY"]
+
+    transformed = []
+    for x, y in points:
+        nx = 0.5 + (x - center_x) * scale_to_unit
+        ny = 0.5 + (y - center_y) * scale_to_unit
+        transformed.append([round(nx, 4), round(ny, 4)])
+
+    return transformed, bbox, {"scaleToUnitSquare": round(scale_to_unit, 4), "padding": padding}
+
+
 def build_obj_from_silhouette(points, depth=0.3):
     contour = dedupe_points(sort_points_by_angle(normalize_contour(points)))
     if len(contour) < 8:
@@ -112,7 +161,7 @@ def build_obj_from_silhouette(points, depth=0.3):
         faces.append(f"f {top_a}/{top_a} {bottom_a}/{bottom_a} {bottom_b}/{bottom_b}")
         faces.append(f"f {top_a}/{top_a} {bottom_b}/{bottom_b} {top_b}/{top_b}")
 
-    return {
+    reconstruction = {
         "obj": "\n".join(
             [
                 "# MushyAI worker reconstruction mesh",
@@ -127,9 +176,106 @@ def build_obj_from_silhouette(points, depth=0.3):
         "vertexCount": len(ordered) * 2 + 2,
         "faceCount": len(faces),
     }
+    return reconstruction
+
+
+def compute_depth_from_bbox(bbox):
+    width = max(0.0001, float(bbox["width"]))
+    height = max(0.0001, float(bbox["height"]))
+    aspect = width / height
+    aspect_penalty = max(0.0, min(1.0, abs(1.0 - aspect)))
+    depth = 0.24 + aspect_penalty * 0.12
+    return round(max(0.16, min(0.42, depth)), 4)
+
+
+def estimate_model_confidence(points, bbox):
+    count_score = max(0.0, min(1.0, len(points) / 48.0))
+    fill = float(bbox["width"]) * float(bbox["height"])
+    fill_score = max(0.0, min(1.0, fill / 0.5))
+    confidence = count_score * 0.6 + fill_score * 0.4
+    return round(max(0.25, min(0.96, confidence)), 2)
+
+
+def infer_mesh_parameters(prompt, canonical_points, bbox):
+    prompt_text = str(prompt or "").lower()
+    hard_surface_bias = any(
+        token in prompt_text
+        for token in ["ship", "falcon", "vehicle", "hard-surface", "panel", "hull"]
+    )
+    smooth_bias = any(
+        token in prompt_text
+        for token in ["organic", "creature", "soft", "rounded", "sphere"]
+    )
+
+    depth = compute_depth_from_bbox(bbox)
+    if hard_surface_bias:
+        depth = round(min(0.46, depth + 0.04), 4)
+    if smooth_bias:
+        depth = round(max(0.16, depth - 0.03), 4)
+
+    vertex_budget_hint = int(max(16, min(256, len(canonical_points) * 6)))
+    confidence = estimate_model_confidence(canonical_points, bbox)
+
+    return {
+        "model": {
+            "provider": MODEL_PROVIDER,
+            "version": MODEL_VERSION,
+            "inputFeatures": {
+                "silhouettePointCount": len(canonical_points),
+                "bboxAspectRatio": round(
+                    float(bbox["width"]) / max(0.0001, float(bbox["height"])), 3
+                ),
+                "hardSurfaceBias": hard_surface_bias,
+                "smoothBias": smooth_bias,
+            },
+            "confidence": confidence,
+        },
+        "depth": depth,
+        "vertexBudgetHint": vertex_budget_hint,
+    }
+
+
+def build_job_id(reference_image, points):
+    source = (
+        f"{reference_image.get('sha256', '')}|"
+        f"{reference_image.get('fileName', '')}|"
+        f"{len(points)}|{time.time_ns()}"
+    )
+    digest = sha256(source.encode("utf-8")).hexdigest()[:12]
+    return f"job-{int(time.time() * 1000)}-{digest}"
+
+
+def persist_artifacts(job_id, mesh, normalized_contour, manifest):
+    if not ARTIFACT_DIR:
+        return None
+
+    job_dir = Path(ARTIFACT_DIR) / job_id
+    job_dir.mkdir(parents=True, exist_ok=True)
+
+    manifest_path = job_dir / "manifest.json"
+    contour_path = job_dir / "normalized_contour.json"
+    mesh_path = job_dir / "reconstructed_mesh.obj"
+
+    manifest_path.write_text(json.dumps(manifest, indent=2), encoding="utf-8")
+    contour_path.write_text(json.dumps(normalized_contour, indent=2), encoding="utf-8")
+    mesh_path.write_text(mesh["obj"], encoding="utf-8")
+
+    return {
+        "storage": "filesystem",
+        "basePath": str(job_dir.resolve()),
+        "files": [
+            str(manifest_path.resolve()),
+            str(contour_path.resolve()),
+            str(mesh_path.resolve()),
+        ],
+    }
 
 
 def reconstruct_from_payload(payload):
+    job_started = time.perf_counter()
+    stage_times = {}
+
+    validate_started = time.perf_counter()
     reference_image = payload.get("referenceImage")
     if not isinstance(reference_image, dict):
         return 422, {"error": "referenceImage is required."}
@@ -141,10 +287,55 @@ def reconstruct_from_payload(payload):
     points = normalize_points(silhouette.get("points"))
     if len(points) < 8:
         return 422, {"error": "referenceImage.silhouette.points must include at least 8 normalized points."}
+    stage_times["validate"] = round((time.perf_counter() - validate_started) * 1000, 2)
 
-    mesh = build_obj_from_silhouette(points)
+    preprocess_started = time.perf_counter()
+    canonical_points, bbox, canonicalization = canonicalize_points(points)
+    if len(canonical_points) < 8:
+        return 422, {"error": "Could not canonicalize silhouette points."}
+    stage_times["preprocess"] = round((time.perf_counter() - preprocess_started) * 1000, 2)
+
+    inference_started = time.perf_counter()
+    inference = infer_mesh_parameters(payload.get("prompt"), canonical_points, bbox)
+    stage_times["inference"] = round((time.perf_counter() - inference_started) * 1000, 2)
+
+    mesh_started = time.perf_counter()
+    depth = inference["depth"]
+    mesh = build_obj_from_silhouette(canonical_points, depth=depth)
     if not mesh:
         return 422, {"error": "Could not construct reconstruction mesh from contour."}
+    stage_times["mesh"] = round((time.perf_counter() - mesh_started) * 1000, 2)
+
+    postprocess_started = time.perf_counter()
+    normalized_contour = dedupe_points(sort_points_by_angle(normalize_contour(canonical_points)))
+    job_id = build_job_id(reference_image, points)
+    artifact_manifest = {
+        "pipelineVersion": "worker-pipeline-v0.3",
+        "jobId": job_id,
+        "stages": [
+            "validate-silhouette",
+            "canonicalize-contour",
+            "generate-mesh",
+            "postprocess-mesh",
+        ],
+        "stats": {
+            "sourcePointCount": len(points),
+            "canonicalPointCount": len(canonical_points),
+            "normalizedContourPointCount": len(normalized_contour),
+            "sourceBoundingBox": bbox,
+            "canonicalization": canonicalization,
+            "inference": inference["model"],
+            "postprocess": {
+                "depth": depth,
+                "vertexCount": mesh["vertexCount"],
+                "faceCount": mesh["faceCount"],
+                "vertexBudgetHint": inference["vertexBudgetHint"],
+            },
+        },
+    }
+    persisted = persist_artifacts(job_id, mesh, normalized_contour, artifact_manifest)
+    stage_times["postprocess"] = round((time.perf_counter() - postprocess_started) * 1000, 2)
+    total_ms = round((time.perf_counter() - job_started) * 1000, 2)
 
     return (
         200,
@@ -152,7 +343,31 @@ def reconstruct_from_payload(payload):
             "type": "reconstruction",
             "reconstruction": {
                 "method": "worker-silhouette-extrusion-v1",
+                "jobId": job_id,
+                "model": inference["model"],
                 "inputContourPoints": mesh["contourPoints"],
+                "telemetry": {
+                    "pipelineVersion": "worker-pipeline-v0.3",
+                    "timingsMs": stage_times,
+                    "totalMs": total_ms,
+                },
+                "preprocess": {
+                    "pipeline": "silhouette-canonicalization-v1",
+                    "sourceBoundingBox": bbox,
+                    "canonicalization": canonicalization,
+                },
+                "postprocess": {
+                    "pipeline": "mesh-postprocess-v1",
+                    "depth": depth,
+                    "vertexCount": mesh["vertexCount"],
+                    "faceCount": mesh["faceCount"],
+                    "vertexBudgetHint": inference["vertexBudgetHint"],
+                },
+                "artifacts": {
+                    "normalizedContour": normalized_contour,
+                    "manifest": artifact_manifest,
+                    "store": persisted,
+                },
                 "mesh": {
                     "format": "obj",
                     "fileName": "worker_reconstructed_mesh.obj",

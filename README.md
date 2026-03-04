@@ -36,6 +36,10 @@ Optional backend worker settings:
 
 - `RECONSTRUCTION_WORKER_URL` (default in Compose: `http://reconstruction-worker:8000`)
 - `RECONSTRUCTION_WORKER_TIMEOUT_MS` (default: `8000`)
+- `RECONSTRUCTION_WORKER_RETRIES` (backend retry count for worker calls, default: `1`)
+- `RECONSTRUCTION_ARTIFACT_DIR` (worker-side optional output directory for per-job artifacts)
+- `RECONSTRUCTION_MODEL_PROVIDER` (worker model id, default: `contour-prior-v1`)
+- `RECONSTRUCTION_MODEL_VERSION` (worker model version, default: `0.1.0`)
 
 The stack is intentionally simple:
 

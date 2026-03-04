@@ -47,6 +47,18 @@ Implemented in this phase so far:
 - Added a lightweight Python worker with:
   - `/healthz`
   - `/reconstruct` JSON endpoint returning mesh reconstruction payload.
+- Added preprocessing and artifact contract in worker output:
+  - Canonical silhouette framing/normalization metadata.
+  - Artifact manifest and normalized contour trace for debugging and reproducibility.
+- Added optional artifact persistence to disk:
+  - Set `RECONSTRUCTION_ARTIFACT_DIR` to store per-job mesh/manifest/contour artifacts.
+  - Response now includes artifact store metadata and job id for traceability.
+- Added explicit reconstruction model metadata contract:
+  - Worker response now includes `model.provider`, `model.version`, confidence, and input feature summary.
+  - Backend provenance now preserves reconstruction model metadata in exported packages.
+- Added execution telemetry and resilience:
+  - Worker response now includes per-stage timing (`telemetry.timingsMs`) and total runtime.
+  - Backend worker client now retries transient failures before falling back to in-process reconstruction.
 - Added Docker wiring for local/e2e stacks:
   - `reconstruction-worker` service
   - backend dependency and worker URL env wiring.

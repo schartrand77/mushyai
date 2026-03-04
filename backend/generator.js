@@ -657,7 +657,13 @@ function buildPromptPackage(prompt, interpretation) {
   return directives.join("\n");
 }
 
-function buildProvenance(prompt, interpretation, referenceImage) {
+function buildProvenance(
+  prompt,
+  interpretation,
+  referenceImage,
+  reconstruction,
+  reconstructionProvider,
+) {
   return {
     promptSha256: sha256Hex(prompt),
     referenceImage: referenceImage
@@ -680,9 +686,11 @@ function buildProvenance(prompt, interpretation, referenceImage) {
       inputMode: referenceImage
         ? "prompt-plus-reference-metadata"
         : "prompt-only",
-      reconstruction: referenceImage?.silhouette
-        ? "silhouette-extrusion-v1"
-        : "heuristic-primitive-generation",
+      reconstruction:
+        reconstruction?.method ?? "heuristic-primitive-generation",
+      reconstructionProvider:
+        reconstructionProvider ??
+        (referenceImage ? "in-process-fallback" : "none"),
     },
   };
 }
@@ -779,6 +787,9 @@ export function generatePromptInterpretation({
   topology = "game-ready",
   textureDetail = "2k",
   referenceImage = null,
+  reconstructionOverride,
+  reconstructionProvider = null,
+  runtimeWarnings = [],
 }) {
   const cleanPrompt = normalizePrompt(prompt);
   const shapeScore = detectShape(cleanPrompt);
@@ -806,7 +817,10 @@ export function generatePromptInterpretation({
       material: materialScore.confidence,
     },
   };
-  const reconstruction = buildReconstruction(referenceImage);
+  const reconstruction =
+    reconstructionOverride === undefined
+      ? buildReconstruction(referenceImage)
+      : reconstructionOverride;
   const qualityReport = computeQualityReport({
     interpretation,
     reconstruction,
@@ -824,6 +838,8 @@ export function generatePromptInterpretation({
     cleanPrompt,
     interpretation,
     referenceImage,
+    reconstruction,
+    reconstructionProvider,
   );
 
   const blenderScript = generateBlenderScript({
@@ -854,6 +870,12 @@ export function generatePromptInterpretation({
       classifier: "weighted-keyword-ensemble",
       reconstruction:
         reconstruction?.method ?? "heuristic-primitive-generation",
+    },
+    runtime: {
+      reconstructionProvider:
+        reconstructionProvider ??
+        (referenceImage ? "in-process-fallback" : "none"),
+      warnings: runtimeWarnings,
     },
     qualityReport,
     export: exportGate,

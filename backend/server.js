@@ -1,5 +1,6 @@
 import http from "node:http";
 import { generatePromptInterpretation } from "./generator.js";
+import { requestWorkerReconstruction } from "./reconstructionClient.js";
 
 const port = Number(process.env.PORT ?? 3000);
 const REQUEST_LIMIT_BYTES = 1024 * 1024;
@@ -293,12 +294,22 @@ function isJsonRequest(request) {
 }
 
 async function maybeCachedGeneration(payload) {
+  const reconstructionResult =
+    payload.referenceImage !== null
+      ? await requestWorkerReconstruction(payload)
+      : {
+          mode: "disabled",
+          reconstruction: null,
+          warning: "",
+        };
+
   const key = JSON.stringify({
     prompt: payload.prompt,
     stylePreset: payload.stylePreset,
     topology: payload.topology,
     textureDetail: payload.textureDetail,
     referenceImage: payload.referenceImage,
+    reconstructionMode: reconstructionResult.mode,
   });
 
   if (generationCache.has(key)) {
@@ -308,7 +319,22 @@ async function maybeCachedGeneration(payload) {
     return cached;
   }
 
-  const generated = await generatePromptInterpretation(payload);
+  const generated = await generatePromptInterpretation({
+    ...payload,
+    reconstructionOverride:
+      reconstructionResult.mode === "worker"
+        ? reconstructionResult.reconstruction
+        : undefined,
+    reconstructionProvider:
+      reconstructionResult.mode === "worker"
+        ? "external-worker"
+        : payload.referenceImage
+          ? "in-process-fallback"
+          : "none",
+    runtimeWarnings: reconstructionResult.warning
+      ? [reconstructionResult.warning]
+      : [],
+  });
   generationCache.set(key, generated);
 
   if (generationCache.size > CACHE_MAX_ITEMS) {

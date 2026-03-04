@@ -2,76 +2,101 @@
 
 ## Executive verdict
 
-**Current status: requirement is not met.**
+**Current status: partially met (Phase 1 complete, accurate reconstruction not yet met).**
 
-This repository currently supports **text-prompt-only deterministic generation** and does not include a 2D image ingestion pipeline, computer vision feature extraction, or geometry reconstruction from images. Users cannot upload an image and reliably receive an accurate 3D model today.
+This repository now supports:
 
-## Evidence found in code
+- Reference-image upload plumbing (UI + API metadata contract)
+- Strict validation (type/size/dimensions/hash schema)
+- Provenance in exported delivery package
+- Explicit capability messaging that output quality varies
 
-1. **Input surface is prompt-only in the UI**
-   - The job form exposes a textarea (`prompt`) and dropdowns for style/topology/texture detail.
-   - There is no `<input type="file">`, image preview, or file handling in the form workflow.
+It still does **not** provide confident, production-grade image-to-3D reconstruction fidelity.
 
-2. **API contract is text-only**
-   - `/api/generate` validates a JSON payload that requires `prompt` and optional style metadata.
-   - No field exists for image bytes, URLs, masks, camera metadata, or multi-view inputs.
+## What is implemented now (evidence)
 
-3. **Generator is keyword heuristics, not reconstruction**
-   - Shape/material are inferred from regex keyword scoring.
-   - Output is a deterministic Blender script that creates primitive meshes (cube/sphere/cylinder/etc.), not mesh recovery from image data.
+1. **Input surface includes upload flow**
+   - UI contains `referenceImage` file input and optional `referenceCaption`.
+   - Prompt is optional when a reference image is provided.
 
-4. **No model-quality verification loop**
-   - No objective metric (e.g., silhouette IoU, reprojection consistency, LPIPS/CLIP alignment) exists to validate 3D faithfulness to a source image.
+2. **API accepts and validates `referenceImage` metadata**
+   - `/api/generate` accepts `referenceImage` object with strict field validation.
+   - Invalid hash/dimensions/silhouette schema are rejected.
+
+3. **Provenance is stored in output package**
+   - Delivery JSON includes prompt digest, reference digest, and processing metadata.
+   - Input mode and reconstruction mode are captured.
+
+4. **Tests cover Phase 1 contract**
+   - Unit/integration tests cover upload metadata handling and validation failures.
+
+## Remaining gaps to claim accurate 2D -> 3D
+
+1. **No true reconstruction model pipeline**
+   - Current reconstruction is deterministic silhouette extrusion fallback and heuristics.
+   - No learned single-view or multi-view model is integrated.
+
+2. **Quality metrics are heuristic**
+   - Current quality report is useful for gating UX but not a robust reconstruction-fidelity benchmark.
+
+3. **No production mesh/texturing backend**
+   - Missing robust retopo/UV/texture baking and mesh validity workflow expected for high-fidelity exports.
 
 ## Risk assessment
 
-- **High functional risk**: product expectation (“upload 2D → accurate 3D”) is fundamentally beyond current architecture.
-- **High trust risk**: UI language can imply model generation capability beyond what is implemented.
-- **Medium operational risk**: no dedicated error handling for unsupported input mode because upload mode does not exist.
+- **High functional risk** for claims of "accurate from one image."
+- **Medium trust risk** if UX language implies reconstruction reliability beyond current implementation.
+- **Medium operational risk** until objective, evidence-based quality gates replace heuristics.
 
-## Required implementation plan (minimum viable confidence)
+## Roadmap
 
-### Phase 1 — Product honesty + input plumbing
+### Phase 1 - Product honesty + input plumbing
 
-- Add file upload UX (`accept="image/png,image/jpeg,image/webp,image/svg+xml"`).
-- Add strict validation (size/type/resolution) and explicit user-facing capability messaging.
-- Extend API schema with `referenceImage` metadata (format, dimensions, optional caption).
-- Store generation provenance in delivery package (prompt + image digest + processing params).
+- Status: **Complete**
+- Delivered:
+  - Upload UX + caption
+  - Validation for supported formats/size/dimensions/schema
+  - API `referenceImage` contract
+  - Provenance in exported package
 
-### Phase 2 — Single-image 3D reconstruction backend
+### Phase 2 - Single-image 3D reconstruction backend
 
-- Add an actual image-to-3D pipeline (e.g., photogrammetry-lite for multi-view or a single-view reconstruction model).
-- Preprocess images: segmentation/background removal, normalization, canonical framing.
-- Generate mesh + textures and run post-processing (retopo, UVs, normal fixes, scale normalization).
+- Status: **In progress (orchestration scaffold implemented)**
+- Required:
+  - Real image-to-3D model service
+  - Image preprocessing and artifact management
+  - Mesh + texture generation pipeline
 
-### Phase 3 — Confidence scoring and acceptance gates
+### Phase 3 - Confidence scoring and acceptance gates
 
-- Add measurable quality gates:
-  - silhouette overlap against rendered views,
-  - prompt/image semantic alignment,
-  - manifold/mesh validity checks,
-  - texture seam and UV coverage checks.
-- Block “ready for export” when score is below threshold; provide actionable remediation prompts.
+- Status: **Scaffold only**
+- Required:
+  - Evidence-based metrics (silhouette/render consistency/mesh checks)
+  - Threshold-driven export gating tied to reconstruction quality
 
-### Phase 4 — Regression coverage
+### Phase 4 - Regression coverage
 
-- Add fixture-based tests for:
-  - upload validation,
-  - metadata extraction,
-  - deterministic provenance packaging,
-  - quality gate pass/fail behavior.
-- Add E2E tests for upload workflow and exported package contents.
+- Status: **Partial**
+- Required:
+  - Broader fixture set and golden outputs for upload->export path
+  - Full E2E upload and quality-gate behavior coverage
 
-## Acceptance criteria for “confidently accurate”
+## Acceptance criteria for "confidently accurate"
 
 A release should only claim this requirement after all are true:
 
-1. User can upload supported image formats from UI and submit successfully.
-2. Backend reconstructs non-primitive geometry from image evidence.
-3. Output includes textured mesh assets, not only heuristic primitive scripts.
-4. Pipeline produces a transparent confidence score and quality report.
-5. CI has automated tests covering upload-to-export path.
+1. User can upload supported image formats and submit reliably.
+2. Backend reconstructs non-primitive geometry from image evidence (model-based).
+3. Output includes textured mesh assets suitable for downstream DCC/game use.
+4. Pipeline reports transparent, objective confidence metrics and gates exports.
+5. CI enforces regression tests for full upload-to-export behavior.
 
 ## Practical recommendation
 
-Until phases 1–4 are implemented, market this app as a **deterministic prompt interpreter and preview package generator**, not an accurate 2D-to-3D reconstruction tool.
+Market the app today as:
+
+- **Deterministic prompt interpreter with reference-image provenance and experimental reconstruction heuristics**
+
+Do not market it as:
+
+- **Accurate 2D-image to 3D reconstruction**

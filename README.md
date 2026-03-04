@@ -13,9 +13,9 @@ The app includes:
 
 ## Current capability boundary
 
-- This project currently implements a **deterministic prompt-to-3D-spec workflow**.
-- It does **not** yet implement true 2D-image upload to accurate 3D reconstruction.
-- See `AUDIT_2D_TO_3D.md` for a concrete gap analysis and implementation plan.
+- This project currently implements a **deterministic prompt-to-3D-spec workflow with reference-image metadata plumbing**.
+- It supports **image upload validation and provenance capture**, but does **not** yet deliver accurate, model-based 2D-image-to-3D reconstruction.
+- See `AUDIT_2D_TO_3D.md` and `PHASES_2D_TO_3D.md` for status, gaps, and roadmap phases.
 
 ## Local development
 
@@ -32,10 +32,16 @@ The app includes:
 - Open: `http://YOUR_SERVER_IP:8081`
 - Change the external port with `MUSHYAI_PORT=8095 docker compose up -d --build`
 
+Optional backend worker settings:
+
+- `RECONSTRUCTION_WORKER_URL` (default in Compose: `http://reconstruction-worker:8000`)
+- `RECONSTRUCTION_WORKER_TIMEOUT_MS` (default: `8000`)
+
 The stack is intentionally simple:
 
 - `nginx:alpine` serves the static files
-- A small Node backend exposes `/api/generate`
+- A Node backend exposes `/api/generate` and orchestrates reconstruction
+- A Python reconstruction worker exposes `/reconstruct`
 - The container filesystem is read-only
 - Health checks run against the internal web endpoint
 - App data remains browser-local through `localStorage`, which fits the single-user design
